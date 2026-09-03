@@ -1,0 +1,15 @@
+# Python / Backend
+venv/
+__pycache__/
+*.pyc
+*.db
+.env
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+
+# Editor
+.vscode/
+.idea/
