@@ -1,42 +1,8 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
-from database import Base
 from datetime import datetime
 
-
-class Event(Base):
-    __tablename__ = "events"
-
-    id = Column(
-        Integer,
-        primary_key=True,
-        index=True
-    )
-
-    name = Column(
-        String(100),
-        nullable=False
-    )
-
-    description = Column(
-        Text,
-        nullable=False
-    )
-
-    start_date = Column(
-        DateTime,
-        nullable=False
-    )
-
-    end_date = Column(
-        DateTime,
-        nullable=False
-    )
-
-    created_at = Column(
-        DateTime,
-        default=datetime.utcnow
-    )
-
+from app.database.database import Base
+from sqlalchemy.orm import relationship
 
 class User(Base):
     __tablename__ = "users"
@@ -59,7 +25,6 @@ class User(Base):
         index=True
     )
 
-    # Store ONLY hashed password
     password_hash = Column(
         String(255),
         nullable=False
@@ -109,3 +74,8 @@ class User(Base):
         default=True,
         nullable=False
     )
+    submissions = relationship(
+    "Submission",
+    back_populates="user",
+    cascade="all, delete-orphan"
+)
