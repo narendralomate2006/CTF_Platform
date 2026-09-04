@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-
+from pydantic import BaseModel
+from datetime import datetime
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
-from models import Event
+from models import Event, User
 
 
 app = FastAPI(title="CTF Platform")
@@ -13,9 +14,53 @@ app = FastAPI(title="CTF Platform")
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+def create_test_users():
+    db = next(get_db())
+
+    # Create test user
+    user = db.query(User).filter(
+        User.email == "user@ctf.com"
+    ).first()
+
+    if not user:
+        user = User(
+            name="Test User",
+            email="user@ctf.com",
+            password_hash="user123",
+            role="user",
+            college="PCCOE",
+            bio="Cybersecurity enthusiast"
+        )
+
+        db.add(user)
+
+    # Create test admin
+    admin = db.query(User).filter(
+        User.email == "admin@ctf.com"
+    ).first()
+
+    if not admin:
+        admin = User(
+            name="Test Admin",
+            email="admin@ctf.com",
+            password_hash="admin123",
+            role="admin",
+            college="PCCOE",
+            bio="CTF Administrator"
+        )
+
+        db.add(admin)
+
+    db.commit()
+    db.close()
 
 
+create_test_users()
+
+# -------------------------
 # CORS
+# -------------------------
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,19 +71,8 @@ app.add_middleware(
 
 
 # -------------------------
-# Login
+# LOGIN SCHEMA
 # -------------------------
-
-USER = {
-    "email": "user@ctf.com",
-    "password": "user123"
-}
-
-ADMIN = {
-    "email": "admin@ctf.com",
-    "password": "admin123"
-}
-
 
 class LoginRequest(BaseModel):
     email: str
@@ -46,58 +80,59 @@ class LoginRequest(BaseModel):
     role: str
 
 
+# -------------------------
+# SIGN IN
+# -------------------------
+
 @app.post("/signin")
-def signin(data: LoginRequest):
+def signin(
+    data: LoginRequest,
+    db: Session = Depends(get_db)
+):
 
-    if data.role == "user":
+    user = db.query(User).filter(
+        User.email == data.email,
+        User.role == data.role
+    ).first()
 
-        if (
-            data.email == USER["email"]
-            and data.password == USER["password"]
-        ):
-            return {
-                "success": True,
-                "message": "User login successful",
-                "role": "user"
-            }
-
+    if not user:
         raise HTTPException(
             status_code=401,
-            detail="Invalid user email or password"
+            detail="Invalid email or password"
         )
 
-    elif data.role == "admin":
-
-        if (
-            data.email == ADMIN["email"]
-            and data.password == ADMIN["password"]
-        ):
-            return {
-                "success": True,
-                "message": "Admin login successful",
-                "role": "admin"
-            }
-
+    # Temporary testing
+    # Currently compares the entered password
+    # with the value stored in password_hash.
+    if user.password_hash != data.password:
         raise HTTPException(
             status_code=401,
-            detail="Invalid admin email or password"
+            detail="Invalid email or password"
         )
 
-    raise HTTPException(
-        status_code=400,
-        detail="Invalid role"
-    )
+    return {
+        "success": True,
+        "message": "Login successful",
+        "user_id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "role": user.role
+    }
+
+
+# =========================================================
+# ADMIN EVENT MANAGEMENT
+# =========================================================
 
 
 # -------------------------
 # Event Schema
 # -------------------------
-
 class EventCreate(BaseModel):
     name: str
     description: str
-    start_date: str
-    end_date: str
+    start_date: datetime
+    end_date: datetime
 
 
 # -------------------------
@@ -167,7 +202,6 @@ def edit_event(
     ).first()
 
     if existing_event is None:
-
         raise HTTPException(
             status_code=404,
             detail="Event not found"
@@ -203,7 +237,6 @@ def delete_event(
     ).first()
 
     if existing_event is None:
-
         raise HTTPException(
             status_code=404,
             detail="Event not found"
