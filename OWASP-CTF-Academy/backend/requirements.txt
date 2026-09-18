@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+email-validator
+python-jose[cryptography]
+pwdlib[argon2]
+python-multipart
+reportlab
+psycopg[binary]
+redis>=5.0
+authlib
+
+boto3>=1.35

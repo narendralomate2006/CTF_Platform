@@ -1,0 +1,9 @@
+html,
+body,
+#root {
+  min-height: 100%
+}
+/* Authentication additions */
+.alert-banner.success { border: 1px solid rgba(72, 210, 130, .35); background: rgba(72, 210, 130, .08); }
+.secondary-btn { width: 100%; display:flex; align-items:center; justify-content:center; gap:10px; margin-top:10px; }
+.auth-card a { color: #79b8ff; word-break: break-all; }
