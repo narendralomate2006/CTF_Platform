@@ -1,0 +1,10 @@
+Copy-Item .env.example .env
+docker compose up -build
+notepad .env 
+Add-Content backend\requirements.txt "`nhttpx>=0.27.0"
+Invoke-RestMethod http://127.0.0.1:8000/health 
+Invoke-RestMethod http://127.0.0.1:8000/auth/google/status
+docker compose down 
+docker compose build --no-cache frontend
+docker compose up -d
+docker compose ps

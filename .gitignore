@@ -1,0 +1,26 @@
+# Python / Backend
+venv/
+__pycache__/
+*.pyc
+*.db
+.env
+.env.*
+!*.example
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+
+# Uploads & Generated files
+backend/certificates/*.pdf
+backend/uploads/*
+!backend/uploads/.gitkeep
+*.log
+
+# Editor & OS
+.vscode/
+.idea/
+*.dump
+Thumbs.db
+.DS_Store
