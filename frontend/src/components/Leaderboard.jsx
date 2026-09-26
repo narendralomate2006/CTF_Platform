@@ -6,13 +6,15 @@ import {
   FaAward,
   FaSearch,
   FaUniversity,
-  FaCheckCircle
+  FaCheckCircle,
+  FaUsers
 } from "react-icons/fa";
 
 export default function Leaderboard({ onSelectUser }) {
-  const [viewMode, setViewMode] = useState("global"); // 'global', 'colleges'
+  const [viewMode, setViewMode] = useState("global"); // 'global', 'colleges', 'squads'
   const [leaderboard, setLeaderboard] = useState([]);
   const [colleges, setColleges] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -24,9 +26,12 @@ export default function Leaderboard({ onSelectUser }) {
           params: { search: search.trim() || undefined }
         });
         setLeaderboard(res.data.leaderboard || []);
-      } else {
+      } else if (viewMode === "colleges") {
         const res = await api.get("/leaderboard/colleges");
         setColleges(res.data.colleges || []);
+      } else if (viewMode === "squads") {
+        const res = await api.get("/teams/leaderboard");
+        setTeams(res.data.leaderboard || []);
       }
     } catch (err) {
       console.error("Error loading leaderboard:", err);
@@ -81,6 +86,12 @@ export default function Leaderboard({ onSelectUser }) {
           onClick={() => setViewMode("colleges")}
         >
           <FaUniversity /> College Standings
+        </button>
+        <button
+          className={`tab-btn ${viewMode === "squads" ? "active" : ""}`}
+          onClick={() => setViewMode("squads")}
+        >
+          <FaUsers /> Squad Standings
         </button>
       </div>
 
@@ -209,7 +220,7 @@ export default function Leaderboard({ onSelectUser }) {
             </div>
           </div>
         </>
-      ) : (
+      ) : viewMode === "colleges" ? (
         /* College Standings View */
         <div className="table-card">
           <div className="table-responsive">
@@ -243,6 +254,63 @@ export default function Leaderboard({ onSelectUser }) {
                     <td><b className="points-text">{c.total_points} PTS</b></td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* Squad Standings View */
+        <div className="table-card">
+          <div className="table-responsive">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Squad / Team</th>
+                  <th>Members</th>
+                  <th>Flags Captured</th>
+                  <th>Aggregated Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teams.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="no-data">
+                      No squads registered yet. Form a squad in the Squad Hub!
+                    </td>
+                  </tr>
+                ) : (
+                  teams.map(t => (
+                    <tr key={t.team_id}>
+                      <td className="rank-cell">
+                        {t.rank === 1 ? <FaTrophy className="gold" /> :
+                         t.rank === 2 ? <FaMedal className="silver" /> :
+                         t.rank === 3 ? <FaAward className="bronze" /> :
+                         <b>#{t.rank}</b>}
+                      </td>
+                      <td>
+                        <div className="user-table-cell">
+                          <div className="avatar-chip small">
+                            <FaUsers />
+                          </div>
+                          <div>
+                            <b>{t.name}</b>
+                            <small className="view-profile-hint">Code: {t.slug}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{t.member_count}/5 members</td>
+                      <td>
+                        <span className="solve-chip">
+                          <FaCheckCircle /> {t.challenges_solved}
+                        </span>
+                      </td>
+                      <td>
+                        <b className="points-text">{t.points} PTS</b>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

@@ -16,7 +16,9 @@ import {
   FaCode,
   FaSearch,
   FaSkullCrossbones,
-  FaUserSecret
+  FaUserSecret,
+  FaEdit,
+  FaTimes
 } from "react-icons/fa";
 
 // Map badge icons
@@ -37,8 +39,50 @@ export default function Profile({ targetUserId, currentUserId, onBackToPractice 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview"); // 'overview', 'solves', 'badges'
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", college: "", github: "", bio: "", profile_photo: "" });
+  const [editBusy, setEditBusy] = useState(false);
+  const [editMsg, setEditMsg] = useState("");
+  const [editError, setEditError] = useState("");
 
   const effectiveUserId = targetUserId || currentUserId;
+
+  const startEditing = () => {
+    setEditForm({
+      name: profile?.name || "",
+      college: profile?.college || "",
+      github: profile?.github || "",
+      bio: profile?.bio || "",
+      profile_photo: profile?.profile_photo || ""
+    });
+    setEditMsg("");
+    setEditError("");
+    setEditing(true);
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setEditBusy(true);
+    setEditMsg("");
+    setEditError("");
+    try {
+      const res = await api.put("/auth/profile", editForm);
+      setProfile(prev => ({
+        ...prev,
+        name: res.data.user.name,
+        college: res.data.user.college,
+        github: res.data.user.github,
+        bio: res.data.user.bio,
+        profile_photo: res.data.user.profile_photo
+      }));
+      setEditMsg("Profile updated successfully!");
+      setTimeout(() => setEditing(false), 900);
+    } catch (err) {
+      setEditError(err.response?.data?.detail || "Failed to update profile");
+    } finally {
+      setEditBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!effectiveUserId) return;
@@ -116,15 +160,26 @@ export default function Profile({ targetUserId, currentUserId, onBackToPractice 
       <div className="profile-header-card">
         <div className="avatar-section">
           <div className="profile-avatar">
-            {profile.name.charAt(0).toUpperCase()}
+            {profile.profile_photo ? (
+              <img src={profile.profile_photo} alt={profile.name} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+            ) : (
+              profile.name.charAt(0).toUpperCase()
+            )}
           </div>
           {isSelf && <span className="self-badge">You</span>}
         </div>
 
         <div className="profile-main-info">
-          <div className="name-row">
-            <h2>{profile.name}</h2>
-            <span className="role-tag">{profile.role.toUpperCase()}</span>
+          <div className="name-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <h2>{profile.name}</h2>
+              <span className="role-tag">{profile.role.toUpperCase()}</span>
+            </div>
+            {isSelf && (
+              <button className="secondary-btn sm" onClick={startEditing}>
+                <FaEdit /> Edit Profile
+              </button>
+            )}
           </div>
 
           <div className="meta-details">
@@ -448,6 +503,74 @@ export default function Profile({ targetUserId, currentUserId, onBackToPractice 
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Profile Modal */}
+      {editing && (
+        <div className="modal-backdrop" onClick={() => setEditing(false)}>
+          <div className="table-card" style={{ maxWidth: 500, width: "92%", margin: "auto", position: "relative" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3><FaEdit /> Edit Hacker Profile</h3>
+              <button className="icon-action-btn" onClick={() => setEditing(false)}><FaTimes /></button>
+            </div>
+            {editMsg && <div className="alert-banner success" style={{ marginBottom: 12 }}>{editMsg}</div>}
+            {editError && <div className="alert-banner error" style={{ marginBottom: 12 }}>{editError}</div>}
+            <form onSubmit={handleSaveProfile}>
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label>Full Name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                  required
+                  minLength={2}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label>College / University</label>
+                <input
+                  type="text"
+                  placeholder="e.g. PCCOE Pune"
+                  value={editForm.college}
+                  onChange={e => setEditForm({ ...editForm, college: e.target.value })}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label>GitHub Username</label>
+                <input
+                  type="text"
+                  placeholder="e.g. octocat"
+                  value={editForm.github}
+                  onChange={e => setEditForm({ ...editForm, github: e.target.value })}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label>Avatar / Profile Photo URL</label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/photo.jpg"
+                  value={editForm.profile_photo}
+                  onChange={e => setEditForm({ ...editForm, profile_photo: e.target.value })}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label>Bio / Security Focus</label>
+                <textarea
+                  rows={3}
+                  placeholder="Tell others what you're researching..."
+                  value={editForm.bio}
+                  onChange={e => setEditForm({ ...editForm, bio: e.target.value })}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button type="button" className="secondary-btn" onClick={() => setEditing(false)}>Cancel</button>
+                <button type="submit" className="primary-btn" disabled={editBusy}>
+                  {editBusy ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { api } from "../api";
+import React, { useState, useEffect, useMemo } from "react";
+import { api, getToken } from "../api";
 import {
   FaFlag,
   FaCheckCircle,
@@ -14,10 +14,125 @@ import {
   FaSearch,
   FaCopy,
   FaCheck,
-  FaExternalLinkAlt
+  FaExternalLinkAlt,
+  FaServer,
+  FaPlay,
+  FaStop,
+  FaTint,
+  FaFire,
+  FaSortAmountDown,
+  FaTrophy,
+  FaGlobe,
+  FaKey,
+  FaCogs,
+  FaSkull,
+  FaUserSecret,
+  FaFileImage,
+  FaCube,
+  FaThLarge,
+  FaFilter,
+  FaBullseye,
+  FaBolt
 } from "react-icons/fa";
 
-const CATEGORIES = [
+function timeAgo(dateStr) {
+  if (!dateStr) return "";
+  const diffSec = Math.max(1, Math.floor((new Date() - new Date(dateStr)) / 1000));
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return `${Math.floor(diffHr / 24)}d ago`;
+}
+
+export const TRACKS_METADATA = [
+  {
+    category: "All",
+    label: "All Tracks",
+    shortCode: "ALL",
+    icon: FaThLarge,
+    color: "#55d6be",
+    description: "Full spectrum arena challenges across all offensive security domains",
+    topics: ["Full Spectrum", "Multi-Domain", "CTF All-Stars"]
+  },
+  {
+    category: "Web Exploitation",
+    label: "Web Exploitation",
+    shortCode: "WEB // 01",
+    icon: FaGlobe,
+    color: "#38bdf8",
+    description: "Client & server vulnerabilities, injections, auth flaws, and API compromises",
+    topics: ["XSS", "SQLi", "SSRF", "IDOR", "Auth Bypass"]
+  },
+  {
+    category: "Cryptography",
+    label: "Cryptography",
+    shortCode: "CRYPTO // 02",
+    icon: FaKey,
+    color: "#a855f7",
+    description: "Classic ciphers, modern asymmetric RSA, elliptic curves, and key recovery",
+    topics: ["RSA", "AES", "ECC", "Hash Collisions", "PRNG"]
+  },
+  {
+    category: "Forensics",
+    label: "Digital Forensics",
+    shortCode: "DFIR // 03",
+    icon: FaSearch,
+    color: "#10b981",
+    description: "Network packet dumps, memory captures, disk images, and incident artifacts",
+    topics: ["PCAP", "Volatility", "Disk Carving", "Memory Dumps"]
+  },
+  {
+    category: "Reverse Engineering",
+    label: "Reverse Engineering",
+    shortCode: "REV // 04",
+    icon: FaCogs,
+    color: "#f59e0b",
+    description: "Decompiling binaries, assembly analysis, anti-debugging, and firmware reversing",
+    topics: ["Ghidra", "IDA", "x86_64", "Bytecode", "Anti-Debug"]
+  },
+  {
+    category: "Pwn/Binary Exploitation",
+    label: "Binary Exploitation",
+    shortCode: "PWN // 05",
+    icon: FaSkull,
+    color: "#ef4444",
+    description: "Memory corruption, buffer overflows, ROP chain construction, and shellcoding",
+    topics: ["BoF", "ROP Chains", "Format Strings", "Heap"]
+  },
+  {
+    category: "OSINT",
+    label: "Open Source Intel",
+    shortCode: "OSINT // 06",
+    icon: FaUserSecret,
+    color: "#06b6d4",
+    description: "Public intelligence gathering, geolocation, digital footprints, and recon",
+    topics: ["Geolocation", "Social Recon", "Metadata", "Threat Intel"]
+  },
+  {
+    category: "Steganography",
+    label: "Steganography",
+    shortCode: "STEGO // 07",
+    icon: FaFileImage,
+    color: "#ec4899",
+    description: "Data concealed in carrier media, audio spectrograms, and polyglot files",
+    topics: ["LSB Extraction", "Spectrograms", "Polyglots", "Exif"]
+  },
+  {
+    category: "Misc",
+    label: "Miscellaneous",
+    shortCode: "MISC // 08",
+    icon: FaCube,
+    color: "#8b5cf6",
+    description: "Esoteric languages, logic challenges, hardware, and emerging cybersecurity vectors",
+    topics: ["Scripting", "Logic Puzzles", "AI Jailbreak", "Hardware"]
+  }
+];
+
+const DIFFICULTIES = ["All", "Easy", "Medium", "Hard", "Insane"];
+
+export const CATEGORIES = [
   "All",
   "Web Exploitation",
   "Cryptography",
@@ -29,14 +144,18 @@ const CATEGORIES = [
   "Misc"
 ];
 
-const DIFFICULTIES = ["All", "Easy", "Medium", "Hard", "Insane"];
-
 export default function Challenges({ currentUser, onUserUpdated }) {
   const [challenges, setChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activityFeed, setActivityFeed] = useState([]);
+
+  // Filtering states
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedDifficulty, setSelectedDifficulty] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All"); // All, Solved, Unsolved
+  const [selectedAcceptance, setSelectedAcceptance] = useState("All"); // All, high, medium, low
+  const [selectedBlood, setSelectedBlood] = useState("All"); // All, unclaimed, claimed
+  const [sortBy, setSortBy] = useState("default");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Modal state
@@ -54,17 +173,14 @@ export default function Challenges({ currentUser, onUserUpdated }) {
   const [hintBusy, setHintBusy] = useState(null);
   const [newComment, setNewComment] = useState("");
   const [commentLoading, setCommentLoading] = useState(false);
+  const [instance, setInstance] = useState(null);
+  const [instanceBusy, setInstanceBusy] = useState(false);
 
-  // Load challenges
+  // Load all challenges for the arena
   const fetchChallenges = async () => {
     setLoading(true);
     try {
-      const params = {};
-      if (selectedCategory !== "All") params.category = selectedCategory;
-      if (selectedDifficulty !== "All") params.difficulty = selectedDifficulty;
-      if (searchQuery.trim()) params.search = searchQuery.trim();
-
-      const res = await api.get("/challenges", { params });
+      const res = await api.get("/challenges");
       setChallenges(res.data.challenges || []);
     } catch (err) {
       console.error("Error fetching challenges:", err);
@@ -73,14 +189,73 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     }
   };
 
+  const fetchActivityFeed = async () => {
+    try {
+      const res = await api.get("/activity/feed?limit=15");
+      setActivityFeed(res.data.feed || []);
+    } catch (err) {
+      // quiet fail
+    }
+  };
+
   useEffect(() => {
     fetchChallenges();
-  }, [selectedCategory, selectedDifficulty, searchQuery]);
+    fetchActivityFeed();
+    const interval = setInterval(fetchActivityFeed, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!activeModalChall || modalTab !== "hint") return;
-    api.get(`/challenges/${activeModalChall.id}/hints`).then(res => setAdvancedHints(res.data.hints || [])).catch(() => setAdvancedHints([]));
+    api.get(`/challenges/${activeModalChall.id}/hints`)
+      .then(res => setAdvancedHints(res.data.hints || []))
+      .catch(() => setAdvancedHints([]));
   }, [activeModalChall, modalTab]);
+
+  const loadInstance = async (challId) => {
+    try {
+      const res = await api.get(`/challenges/${challId}/instance`);
+      setInstance(res.data.instance || null);
+    } catch {
+      setInstance(null);
+    }
+  };
+
+  const handleStartInstance = async () => {
+    if (!activeModalChall) return;
+    setInstanceBusy(true);
+    setSubmitResult(null);
+    try {
+      const res = await api.post(`/challenges/${activeModalChall.id}/instance/start`);
+      setInstance(res.data.instance);
+      setSubmitResult({ type: "info", text: "Live challenge sandbox instance started." });
+    } catch (err) {
+      setSubmitResult({ type: "error", text: err.response?.data?.detail || "Could not start live instance" });
+    } finally {
+      setInstanceBusy(false);
+    }
+  };
+
+  const handleStopInstance = async () => {
+    if (!activeModalChall) return;
+    setInstanceBusy(true);
+    try {
+      await api.post(`/challenges/${activeModalChall.id}/instance/stop`);
+      setInstance(null);
+      setSubmitResult({ type: "info", text: "Live challenge sandbox instance stopped." });
+    } catch (err) {
+      setSubmitResult({ type: "error", text: err.response?.data?.detail || "Could not stop instance" });
+    } finally {
+      setInstanceBusy(false);
+    }
+  };
+
+  const getFileDownloadUrl = (rawUrl) => {
+    if (!rawUrl) return "#";
+    const token = getToken();
+    if (!token) return rawUrl;
+    return rawUrl.includes("?") ? `${rawUrl}&token=${encodeURIComponent(token)}` : `${rawUrl}?token=${encodeURIComponent(token)}`;
+  };
 
   // Open Challenge Modal
   const openModal = async (chall) => {
@@ -91,11 +266,18 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     setWriteupText("");
     setComments([]);
     setAdvancedHints([]);
+    setInstance(null);
 
-    // Fetch full challenge details
+    if (chall.runtime_enabled) {
+      loadInstance(chall.id);
+    }
+
     try {
       const res = await api.get(`/challenges/${chall.id}`);
       setActiveModalChall(res.data.challenge);
+      if (res.data.challenge?.runtime_enabled) {
+        loadInstance(res.data.challenge.id);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -141,22 +323,40 @@ export default function Challenges({ currentUser, onUserUpdated }) {
       if (res.data.correct) {
         setSubmitResult({
           type: "success",
-          text: res.data.message
+          text: res.data.message,
+          is_first_blood: res.data.is_first_blood
         });
         setActiveModalChall(prev => ({
           ...prev,
           is_solved: true,
-          solves_count: prev.solves_count + 1
+          solves_count: (prev?.solves_count || 0) + 1,
+          first_blood: prev?.first_blood || (res.data.is_first_blood ? {
+            user_name: currentUser?.name || "You",
+            college: currentUser?.college || "Operator",
+            team_name: currentUser?.team_name || null,
+            time: new Date().toISOString()
+          } : null)
         }));
-        // Update challenge list item
         setChallenges(prev =>
-          prev.map(c => c.id === activeModalChall.id ? { ...c, is_solved: true, solves_count: c.solves_count + 1 } : c)
+          prev.map(c => c.id === activeModalChall.id ? {
+            ...c,
+            is_solved: true,
+            solves_count: (c.solves_count || 0) + 1,
+            first_blood: c.first_blood || (res.data.is_first_blood ? {
+              user_name: currentUser?.name || "You",
+              college: currentUser?.college || "Operator",
+              team_name: currentUser?.team_name || null,
+              time: new Date().toISOString()
+            } : null)
+          } : c)
         );
+        fetchActivityFeed();
         if (onUserUpdated) onUserUpdated();
       } else {
         setSubmitResult({
           type: "error",
-          text: res.data.message
+          text: res.data.message,
+          is_first_blood: false
         });
       }
     } catch (err) {
@@ -169,7 +369,6 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     }
   };
 
-  // Fetch Writeup
   const loadWriteup = async () => {
     setModalTab("writeup");
     try {
@@ -180,7 +379,6 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     }
   };
 
-  // Fetch Comments
   const loadComments = async () => {
     setModalTab("comments");
     try {
@@ -191,7 +389,6 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     }
   };
 
-  // Post Comment
   const handlePostComment = async (e) => {
     e.preventDefault();
     if (!newComment.trim()) return;
@@ -209,17 +406,112 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     }
   };
 
-  // Filter challenges by status
-  const filteredChallenges = challenges.filter(c => {
-    if (selectedStatus === "Solved") return c.is_solved;
-    if (selectedStatus === "Unsolved") return !c.is_solved;
-    return true;
-  });
-
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Compute stats per track dynamically for the Category Boxes
+  const trackStats = useMemo(() => {
+    const stats = {};
+    TRACKS_METADATA.forEach(tr => {
+      const list = tr.category === "All" ? challenges : challenges.filter(c => c.category === tr.category);
+      const total = list.length;
+      const solved = list.filter(c => c.is_solved).length;
+      const points = list.reduce((sum, c) => sum + (c.points || 0), 0);
+      const solvesSum = list.reduce((sum, c) => sum + (c.solves_count || 0), 0);
+      const attemptsSum = list.reduce((sum, c) => sum + (c.total_attempts || c.solves_count || 0), 0);
+      const avgAcceptance = attemptsSum > 0 ? Math.round((solvesSum / attemptsSum) * 100) : (total > 0 ? 100 : 0);
+      stats[tr.category] = {
+        total,
+        solved,
+        points,
+        pct: total > 0 ? Math.round((solved / total) * 100) : 0,
+        avgAcceptance
+      };
+    });
+    return stats;
+  }, [challenges]);
+
+  // Multi-option filtering logic
+  const filteredChallenges = useMemo(() => {
+    return challenges.filter(c => {
+      // 1. Category Filter
+      if (selectedCategory !== "All" && c.category !== selectedCategory) return false;
+
+      // 2. Difficulty Filter
+      if (selectedDifficulty !== "All" && (c.difficulty || "").toLowerCase() !== selectedDifficulty.toLowerCase()) return false;
+
+      // 3. Status Filter (Solved / Unsolved)
+      if (selectedStatus === "Solved" && !c.is_solved) return false;
+      if (selectedStatus === "Unsolved" && c.is_solved) return false;
+
+      // 4. Acceptance Rate Filter
+      const acc = c.acceptance_rate ?? (c.total_attempts ? Math.round((c.solves_count / c.total_attempts) * 100) : (c.solves_count > 0 ? 100 : 0));
+      if (selectedAcceptance === "high" && acc < 60) return false;
+      if (selectedAcceptance === "medium" && (acc < 30 || acc >= 60)) return false;
+      if (selectedAcceptance === "low" && acc >= 30) return false;
+
+      // 5. First Blood Filter
+      if (selectedBlood === "unclaimed" && c.first_blood) return false;
+      if (selectedBlood === "claimed" && !c.first_blood) return false;
+
+      // 6. Search Query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchTitle = c.title?.toLowerCase().includes(q);
+        const matchCategory = c.category?.toLowerCase().includes(q);
+        const matchDesc = c.description?.toLowerCase().includes(q);
+        if (!matchTitle && !matchCategory && !matchDesc) return false;
+      }
+
+      return true;
+    });
+  }, [challenges, selectedCategory, selectedDifficulty, selectedStatus, selectedAcceptance, selectedBlood, searchQuery]);
+
+  // Multi-option sorting logic
+  const sortedChallenges = useMemo(() => {
+    const diffOrder = { "easy": 1, "medium": 2, "hard": 3, "insane": 4 };
+
+    return [...filteredChallenges].sort((a, b) => {
+      const accA = a.acceptance_rate ?? (a.total_attempts ? (a.solves_count / a.total_attempts) * 100 : (a.solves_count > 0 ? 100 : 0));
+      const accB = b.acceptance_rate ?? (b.total_attempts ? (b.solves_count / b.total_attempts) * 100 : (b.solves_count > 0 ? 100 : 0));
+
+      if (sortBy === "acceptance-desc") return accB - accA;
+      if (sortBy === "acceptance-asc") return accA - accB;
+      if (sortBy === "points-desc") return (b.points || 0) - (a.points || 0);
+      if (sortBy === "points-asc") return (a.points || 0) - (b.points || 0);
+      if (sortBy === "diff-asc") return (diffOrder[a.difficulty?.toLowerCase()] || 0) - (diffOrder[b.difficulty?.toLowerCase()] || 0);
+      if (sortBy === "diff-desc") return (diffOrder[b.difficulty?.toLowerCase()] || 0) - (diffOrder[a.difficulty?.toLowerCase()] || 0);
+      if (sortBy === "solves-desc") return (b.solves_count || 0) - (a.solves_count || 0);
+      if (sortBy === "solves-asc") return (a.solves_count || 0) - (b.solves_count || 0);
+      if (sortBy === "title-asc") return a.title.localeCompare(b.title);
+      return 0; // default
+    });
+  }, [filteredChallenges, sortBy]);
+
+  const activeCategoryMeta = TRACKS_METADATA.find(t => t.category === selectedCategory);
+
+  const totalPoints = useMemo(() => challenges.reduce((s, c) => s + (c.points || 0), 0), [challenges]);
+  const solvedCount = useMemo(() => challenges.filter(c => c.is_solved).length, [challenges]);
+  const progressPct = challenges.length ? Math.round((solvedCount / challenges.length) * 100) : 0;
+  const unclaimedBlood = useMemo(() => challenges.filter(c => !c.first_blood).length, [challenges]);
+  const avgPlatformAcceptance = useMemo(() => {
+    if (!challenges.length) return 0;
+    const totalSolves = challenges.reduce((s, c) => s + (c.solves_count || 0), 0);
+    const totalAttempts = challenges.reduce((s, c) => s + (c.total_attempts || c.solves_count || 0), 0);
+    return totalAttempts > 0 ? Math.round((totalSolves / totalAttempts) * 100) : 100;
+  }, [challenges]);
+
+  const resetAllFilters = () => {
+    setSelectedCategory("All");
+    setSelectedDifficulty("All");
+    setSelectedStatus("All");
+    setSelectedAcceptance("All");
+    setSelectedBlood("All");
+    setSortBy("default");
+    setSearchQuery("");
   };
 
   return (
@@ -245,20 +537,104 @@ export default function Challenges({ currentUser, onUserUpdated }) {
         </div>
       </div>
 
-      {/* Category Pills Bar */}
-      <div className="category-scroll-bar">
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat}
-            className={`cat-pill ${selectedCategory === cat ? "active" : ""}`}
-            onClick={() => setSelectedCategory(cat)}
-          >
-            {cat}
-          </button>
-        ))}
+      {/* Live Activity Stream Ticker */}
+      <div className="live-ticker-panel">
+        <div className="live-ticker-label">
+          <span className="live-beacon-dot" />
+          <FaFire className="live-flame-icon" />
+          <span>LIVE SOLVES</span>
+        </div>
+        <div className="live-ticker-viewport">
+          {activityFeed.length === 0 ? (
+            <div className="live-ticker-empty">
+              <span>Ready for first bloods. Capture flags to broadcast your handle platform-wide!</span>
+            </div>
+          ) : (
+            <div className="live-ticker-stream">
+              {activityFeed.map((item) => (
+                <div key={item.id} className={`ticker-pill ${item.is_first_blood ? "first-blood" : ""}`}>
+                  {item.is_first_blood && (
+                    <span className="ticker-fb-tag">
+                      <FaTint /> FIRST BLOOD
+                    </span>
+                  )}
+                  <span className="ticker-user">
+                    <b>{item.user_name}</b>
+                    {item.team_name ? (
+                      <small className="ticker-tag-team">[{item.team_name}]</small>
+                    ) : item.college ? (
+                      <small className="ticker-tag-college">({item.college})</small>
+                    ) : null}
+                  </span>
+                  <span className="ticker-action">captured</span>
+                  <span className="ticker-chall-name">{item.challenge_title}</span>
+                  <span className="ticker-pts">+{item.points} pts</span>
+                  <span className="ticker-timestamp">{timeAgo(item.submitted_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Filters Bar: Difficulty & Status */}
+      {/* Compact Single-Line Category Boxes */}
+      <div className="compact-tracks-strip">
+        <div className="compact-tracks-header">
+          <div className="compact-tracks-title-group">
+            <span className="compact-tracks-kicker">// OFFENSIVE DOMAIN TRACKS</span>
+            <span className="compact-tracks-subtitle">Select a category to isolate challenges:</span>
+          </div>
+          {selectedCategory !== "All" && (
+            <button className="compact-tracks-clear-btn" onClick={() => setSelectedCategory("All")}>
+              Reset to All ({challenges.length})
+            </button>
+          )}
+        </div>
+        <div className="compact-tracks-row">
+          {TRACKS_METADATA.map((track) => {
+            const Icon = track.icon;
+            const st = trackStats[track.category] || { total: 0, solved: 0, points: 0, pct: 0, avgAcceptance: 0 };
+            const isActive = selectedCategory === track.category;
+            return (
+              <div
+                key={track.category}
+                className={`compact-track-card ${isActive ? "active" : ""}`}
+                style={{ "--track-color": track.color }}
+                onClick={() => setSelectedCategory(track.category)}
+                role="button"
+                tabIndex={0}
+                title={`${track.label}: ${st.solved}/${st.total} solved (${st.pct}%)`}
+              >
+                <div className="compact-track-top">
+                  <div className="compact-track-icon">
+                    <Icon />
+                  </div>
+                  <div className="compact-track-badges">
+                    <span className="compact-track-count">{st.total} Qs</span>
+                    {isActive && <span className="compact-track-dot" />}
+                  </div>
+                </div>
+                <div className="compact-track-name">{track.label}</div>
+                <div className="compact-track-footer">
+                  <span className="compact-track-stat">{st.solved}/{st.total} Solved</span>
+                  <span className="compact-track-acc">{st.avgAcceptance}% acc</span>
+                </div>
+                <div className="compact-track-prog-bar">
+                  <div
+                    className="compact-track-prog-fill"
+                    style={{
+                      width: `${st.pct}%`,
+                      backgroundColor: track.color
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Filters Bar: Difficulty & Status & Sorting */}
       <div className="filters-bar">
         <div className="filter-group">
           <label>Difficulty:</label>
@@ -289,24 +665,82 @@ export default function Challenges({ currentUser, onUserUpdated }) {
             ))}
           </div>
         </div>
+
+        <div className="filter-group">
+          <label>Acceptance:</label>
+          <select
+            value={selectedAcceptance}
+            onChange={e => setSelectedAcceptance(e.target.value)}
+            className="filter-select"
+          >
+            <option value="All">All</option>
+            <option value="high">High (≥60%)</option>
+            <option value="medium">Medium (30-59%)</option>
+            <option value="low">Low (&lt;30%)</option>
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label>First Blood:</label>
+          <select
+            value={selectedBlood}
+            onChange={e => setSelectedBlood(e.target.value)}
+            className="filter-select"
+          >
+            <option value="All">All</option>
+            <option value="unclaimed">🩸 Unclaimed</option>
+            <option value="claimed">Claimed</option>
+          </select>
+        </div>
+
+        <div className="filter-group sort-group">
+          <label><FaSortAmountDown /> Sort:</label>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="filter-select sort-select"
+          >
+            <option value="default">Default</option>
+            <option value="acceptance-desc">Acceptance: High → Low</option>
+            <option value="acceptance-asc">Acceptance: Low → High</option>
+            <option value="diff-asc">Difficulty: Easy → Hard</option>
+            <option value="diff-desc">Difficulty: Hard → Easy</option>
+            <option value="points-desc">Points: High → Low</option>
+            <option value="points-asc">Points: Low → High</option>
+            <option value="solves-desc">Most Solved</option>
+            <option value="solves-asc">Least Solved</option>
+            <option value="title-asc">Title: A → Z</option>
+          </select>
+        </div>
+
+        {(selectedCategory !== "All" || selectedDifficulty !== "All" || selectedStatus !== "All" || selectedAcceptance !== "All" || selectedBlood !== "All" || searchQuery) && (
+          <button className="reset-filters-link" onClick={resetAllFilters}>
+            <FaTimes /> Reset Filters
+          </button>
+        )}
       </div>
 
       {/* Challenge Grid */}
       {loading ? (
         <div className="loading-state">
           <div className="spinner"></div>
-          <p>Scanning vulnerability instances...</p>
+          <p>Loading challenges...</p>
         </div>
-      ) : filteredChallenges.length === 0 ? (
+      ) : sortedChallenges.length === 0 ? (
         <div className="empty-state">
           <FaFlag className="empty-icon" />
           <h3>No challenges match your criteria</h3>
           <p>Try clearing filters or search terms.</p>
+          <button className="primary-btn" onClick={resetAllFilters}>
+            Reset Filters
+          </button>
         </div>
       ) : (
         <div className="challenge-grid">
-          {filteredChallenges.map(chall => {
+          {sortedChallenges.map(chall => {
             const diffClass = (chall.difficulty || "easy").toLowerCase();
+            const accRate = chall.acceptance_rate ?? (chall.total_attempts ? Math.round((chall.solves_count / chall.total_attempts) * 100) : (chall.solves_count > 0 ? 100 : 0));
+
             return (
               <div
                 key={chall.id}
@@ -323,13 +757,25 @@ export default function Challenges({ currentUser, onUserUpdated }) {
                 <h3 className="chall-title">{chall.title}</h3>
                 <p className="chall-desc">{chall.description}</p>
 
+                {chall.first_blood ? (
+                  <div className="chall-fb-badge" title={`First blood captured by ${chall.first_blood.user_name}`}>
+                    <FaTint className="fb-drop-icon pulse" />
+                    <span>First Blood: <b>{chall.first_blood.user_name}</b></span>
+                  </div>
+                ) : (
+                  <div className="chall-fb-badge unclaimed" title="First blood is still up for grabs!">
+                    <FaTint className="fb-drop-icon" />
+                    <span>🩸 Unclaimed Blood</span>
+                  </div>
+                )}
+
                 <div className="card-footer">
                   <div className="points-badge">
                     <b>{chall.points}</b> <small>PTS</small>
                   </div>
 
                   <div className="solves-info">
-                    {chall.solves_count} solves
+                    👥 {chall.solves_count || 0} solves · 🎯 {accRate}%
                   </div>
 
                   {chall.is_solved ? (
@@ -348,7 +794,7 @@ export default function Challenges({ currentUser, onUserUpdated }) {
         </div>
       )}
 
-      {/* Challenge Modal */}
+      {/* Modal */}
       {activeModalChall && (
         <div className="modal-backdrop" onClick={() => setActiveModalChall(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -365,6 +811,9 @@ export default function Challenges({ currentUser, onUserUpdated }) {
                 </span>
                 <span className="points-badge">
                   <b>{activeModalChall.points}</b> PTS
+                </span>
+                <span className="acceptance-pill">
+                  🎯 {activeModalChall.acceptance_rate ?? (activeModalChall.total_attempts ? Math.round((activeModalChall.solves_count / activeModalChall.total_attempts) * 100) : 100)}% Acceptance
                 </span>
                 {activeModalChall.is_solved && (
                   <span className="solved-badge-pill">
@@ -412,12 +861,46 @@ export default function Challenges({ currentUser, onUserUpdated }) {
               {/* TAB 1: DETAILS */}
               {modalTab === "details" && (
                 <div className="tab-pane">
+                  {/* First Blood Showcase */}
+                  {activeModalChall.first_blood ? (
+                    <div className="modal-first-blood-showcase">
+                      <div className="modal-fb-header">
+                        <FaTint className="fb-drop-icon pulse" />
+                        <span className="modal-fb-title">FIRST BLOOD CAPTOR</span>
+                      </div>
+                      <div className="modal-fb-content">
+                        <span className="modal-fb-solver">
+                          <b>{activeModalChall.first_blood.user_name}</b>
+                          {activeModalChall.first_blood.college && (
+                            <small className="modal-fb-college"> · {activeModalChall.first_blood.college}</small>
+                          )}
+                          {activeModalChall.first_blood.team_name && (
+                            <span className="modal-fb-squad">🛡️ Squad {activeModalChall.first_blood.team_name}</span>
+                          )}
+                        </span>
+                        {activeModalChall.first_blood.time && (
+                          <span className="modal-fb-date">
+                            Captured on {new Date(activeModalChall.first_blood.time).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="modal-first-blood-unclaimed">
+                      <FaTint className="fb-drop-icon" />
+                      <div>
+                        <b>🩸 First Blood Unclaimed!</b>
+                        <p>No operator has solved this challenge yet. Solve it first to claim legendary first blood!</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="description-box">
                     <p>{activeModalChall.description}</p>
                   </div>
 
-                  {/* Connection command or files */}
-                  {(activeModalChall.connection_info || activeModalChall.file_url) && (
+                  {/* Connection command, files, or live instance */}
+                  {(activeModalChall.connection_info || activeModalChall.file_url || activeModalChall.runtime_enabled) && (
                     <div className="resources-box">
                       {activeModalChall.connection_info && (
                         <div className="connection-info">
@@ -438,13 +921,41 @@ export default function Challenges({ currentUser, onUserUpdated }) {
                         <div className="file-attachment">
                           <span className="res-label"><FaDownload /> Challenge File:</span>
                           <a
-                            href={activeModalChall.file_url}
+                            href={getFileDownloadUrl(activeModalChall.file_url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="download-link"
                           >
                             Download Challenge File <FaExternalLinkAlt />
                           </a>
+                        </div>
+                      )}
+
+                      {activeModalChall.runtime_enabled && (
+                        <div className="live-instance-panel">
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
+                              <FaServer style={{ color: "#55d6be" }} /> Live Sandbox Instance
+                            </span>
+                            <small style={{ opacity: 0.75 }}>Isolated Docker environment</small>
+                          </div>
+                          {instance?.status === "running" ? (
+                            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                              <code style={{ background: "#0b1220", padding: "4px 8px", borderRadius: 4, color: "#55d6be" }}>
+                                {instance.connection_url}
+                              </code>
+                              <a href={instance.connection_url} target="_blank" rel="noreferrer" className="primary-btn sm" style={{ textDecoration: "none" }}>
+                                Open Instance <FaExternalLinkAlt />
+                              </a>
+                              <button className="danger-btn sm" onClick={handleStopInstance} disabled={instanceBusy}>
+                                <FaStop /> {instanceBusy ? "Stopping..." : "Stop Instance"}
+                              </button>
+                            </div>
+                          ) : (
+                            <button className="primary-btn sm" onClick={handleStartInstance} disabled={instanceBusy}>
+                              <FaPlay /> {instanceBusy ? "Starting..." : "Start Live Instance"}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -470,9 +981,21 @@ export default function Challenges({ currentUser, onUserUpdated }) {
 
                   {/* Submission alerts */}
                   {submitResult && (
-                    <div className={`alert-banner ${submitResult.type}`}>
-                      {submitResult.type === "success" && <FaCheckCircle />}
-                      <span>{submitResult.text}</span>
+                    <div className={`alert-banner ${submitResult.type} ${submitResult.is_first_blood ? "first-blood-banner" : ""}`}>
+                      {submitResult.is_first_blood ? (
+                        <div className="fb-alert-inner">
+                          <span className="fb-alert-trophy">🩸 🏆</span>
+                          <div className="fb-alert-text">
+                            <strong>FIRST BLOOD CAPTURED!</strong>
+                            <p>{submitResult.text}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {submitResult.type === "success" && <FaCheckCircle />}
+                          <span>{submitResult.text}</span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

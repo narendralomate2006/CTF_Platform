@@ -29,7 +29,16 @@ export default function Auth({ onLoginSuccess }) {
     } else if (oauth) {
       setLoading(true);
       api.post("/auth/oauth/exchange", { code: decodeURIComponent(oauth[1]) })
-        .then(async r => { saveToken(r.data.access_token); const me = await api.get("/auth/me"); onLoginSuccess(me.data); window.location.hash = "challenges"; })
+        .then(async r => {
+          saveToken(r.data.access_token);
+
+          const me = await api.get("/auth/me");
+
+          onLoginSuccess(me.data);
+
+          // Google login should land on the main dashboard.
+          window.location.hash = "dashboard";
+        })
         .catch(e => setError(e.response?.data?.detail || "Google sign-in failed."))
         .finally(() => setLoading(false));
     }
@@ -86,10 +95,10 @@ export default function Auth({ onLoginSuccess }) {
         <button type="submit" className="primary-btn submit-auth-btn" disabled={loading}>{loading ? "Processing..." : mode === "login" ? "Enter CTF Arena" : mode === "register" ? "Create Account" : mode === "forgot" ? "Send Reset Email" : "Update Password"}</button>
       </form>}
       {mode === "verify" && <button className="primary-btn submit-auth-btn" onClick={resend} disabled={loading}>{loading ? "Sending..." : "Resend Verification Email"}</button>}
-      {mode === "login" && <><button type="button" className="secondary-btn submit-auth-btn" onClick={googleLogin}><FaGoogle /> Continue with Google</button><div className="auth-footer-toggle"><button className="link-btn" onClick={() => {setMode("forgot");setError("");setMessage("")}}>Forgot password?</button></div></>}
-      {(mode === "login" || mode === "register") && <div className="auth-footer-toggle"><button className="link-btn" onClick={() => {setMode(mode === "login" ? "register" : "login");setError("");setMessage("")}}>{mode === "login" ? "Don't have an account? Register" : "Already registered? Login"}</button></div>}
-      {mode !== "login" && mode !== "register" && <div className="auth-footer-toggle"><button className="link-btn" onClick={() => {setMode("login");setError("");setMessage("");window.location.hash=""}}>Back to Login</button></div>}
-      {mode === "login" && <div className="demo-credentials-box"><div className="demo-box-header"><FaInfoCircle /> <b>Quick Test Logins</b></div><div className="demo-chips"><button type="button" className="demo-chip-btn" onClick={() => setFormData(p => ({...p,email:"admin@ctf.com",password:"admin123"}))}><span className="demo-role admin-role">ADMIN</span><code>admin@ctf.com</code><span>/</span><code>admin123</code></button><button type="button" className="demo-chip-btn" onClick={() => setFormData(p => ({...p,email:"user@ctf.com",password:"user123"}))}><span className="demo-role student-role">STUDENT</span><code>user@ctf.com</code><span>/</span><code>user123</code></button></div></div>}
+      {mode === "login" && <><button type="button" className="secondary-btn submit-auth-btn" onClick={googleLogin}><FaGoogle /> Continue with Google</button><div className="auth-footer-toggle"><button className="link-btn" onClick={() => { setMode("forgot"); setError(""); setMessage("") }}>Forgot password?</button></div></>}
+      {(mode === "login" || mode === "register") && <div className="auth-footer-toggle"><button className="link-btn" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); setMessage("") }}>{mode === "login" ? "Don't have an account? Register" : "Already registered? Login"}</button></div>}
+      {mode !== "login" && mode !== "register" && <div className="auth-footer-toggle"><button className="link-btn" onClick={() => { setMode("login"); setError(""); setMessage(""); window.location.hash = "" }}>Back to Login</button></div>}
+      {mode === "login" && <div className="demo-credentials-box"><div className="demo-box-header"><FaInfoCircle /> <b>Quick Test Logins</b></div><div className="demo-chips"><button type="button" className="demo-chip-btn" onClick={() => setFormData(p => ({ ...p, email: "admin@ctf.com", password: "admin123" }))}><span className="demo-role admin-role">ADMIN</span><code>admin@ctf.com</code><span>/</span><code>admin123</code></button><button type="button" className="demo-chip-btn" onClick={() => setFormData(p => ({ ...p, email: "user@ctf.com", password: "user123" }))}><span className="demo-role student-role">STUDENT</span><code>user@ctf.com</code><span>/</span><code>user123</code></button></div></div>}
     </div></div>
   </div>;
 }

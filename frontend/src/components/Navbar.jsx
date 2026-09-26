@@ -18,6 +18,7 @@ export default function Navbar({
   theme,
   setTheme,
   onOpenProfile,
+  onNavigateHome,
   unreadNotifications = 0,
   onOpenNotifications
 }) {
@@ -37,7 +38,7 @@ export default function Navbar({
         {mobileOpen ? <FaTimes /> : <FaBars />}
       </button>
 
-      <div className="brand" onClick={() => onOpenProfile(null)}>
+      <div className="brand" onClick={() => (onNavigateHome ? onNavigateHome() : onOpenProfile(null))} style={{ cursor: "pointer" }}>
         <FaShieldAlt className="brand-icon" />
         <div className="brand-text">
           <b>OWASP <span>CTF</span></b>
@@ -60,8 +61,16 @@ export default function Navbar({
 
         {user && (
           <div className="user-pill" onClick={() => onOpenProfile(user.id)}>
-            <div className="avatar-chip">
-              {user.name.charAt(0).toUpperCase()}
+            <div className="avatar-chip" style={{ overflow: "hidden" }}>
+              {user.profile_photo ? (
+                <img
+                  src={user.profile_photo}
+                  alt={user.name}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+                />
+              ) : (
+                user.name.charAt(0).toUpperCase()
+              )}
             </div>
             <div className="user-info-text">
               <span className="name">{user.name}</span>

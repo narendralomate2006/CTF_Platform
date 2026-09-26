@@ -31,9 +31,6 @@ class User(Base):
     email_verified = Column(Boolean, default=False, nullable=False, index=True)
     google_sub = Column(String(255), unique=True, nullable=True, index=True)
     verification_sent_at = Column(DateTime, nullable=True)
-    email_verified = Column(Boolean, default=False, nullable=False, index=True)
-    google_sub = Column(String(255), unique=True, nullable=True, index=True)
-    verification_sent_at = Column(DateTime, nullable=True)
 
     # Relationships
     submissions = relationship("Submission", back_populates="user", cascade="all, delete-orphan")
@@ -54,13 +51,9 @@ class Event(Base):
     is_scoreboard_frozen = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    email_verified = Column(Boolean, default=False, nullable=False, index=True)
-    google_sub = Column(String(255), unique=True, nullable=True, index=True)
-    verification_sent_at = Column(DateTime, nullable=True)
-    email_verified = Column(Boolean, default=False, nullable=False, index=True)
-    google_sub = Column(String(255), unique=True, nullable=True, index=True)
-    verification_sent_at = Column(DateTime, nullable=True)
     participation_mode = Column(String(20), default="individual", nullable=False)  # individual, team, both
+    cert_template_path = Column(String(500), nullable=True)
+    cert_config = Column(Text, nullable=True)
 
     # Relationships
     challenges = relationship("Challenge", back_populates="event")
@@ -102,16 +95,14 @@ class Challenge(Base):
     solves_count = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    email_verified = Column(Boolean, default=False, nullable=False, index=True)
-    google_sub = Column(String(255), unique=True, nullable=True, index=True)
-    verification_sent_at = Column(DateTime, nullable=True)
-    email_verified = Column(Boolean, default=False, nullable=False, index=True)
-    google_sub = Column(String(255), unique=True, nullable=True, index=True)
-    verification_sent_at = Column(DateTime, nullable=True)
     status = Column(String(20), default="published", nullable=False)  # draft, published, archived
     flag_mode = Column(String(20), default="static", nullable=False)  # static, user, team
     flag_secret = Column(String(255), nullable=True)
     file_path = Column(String(500), nullable=True)
+    runtime_image = Column(String(255), nullable=True)
+    runtime_port = Column(Integer, nullable=True)
+    runtime_protocol = Column(String(20), default="http", nullable=False)
+    instance_timeout_minutes = Column(Integer, default=60, nullable=False)
 
     # Relationships
     event = relationship("Event", back_populates="challenges")
@@ -220,6 +211,7 @@ class Team(Base):
     owner = relationship("User", foreign_keys=[owner_id])
     members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
     event_registrations = relationship("EventRegistration", back_populates="team", cascade="all, delete-orphan")
+    join_requests = relationship("TeamJoinRequest", back_populates="team", cascade="all, delete-orphan")
 
 
 class TeamMember(Base):
@@ -231,6 +223,21 @@ class TeamMember(Base):
     joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     team = relationship("Team", back_populates="members")
+    user = relationship("User")
+
+
+class TeamJoinRequest(Base):
+    __tablename__ = "team_join_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    note = Column(Text, nullable=True)
+    status = Column(String(20), default="pending", nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    team = relationship("Team", back_populates="join_requests")
     user = relationship("User")
 
 

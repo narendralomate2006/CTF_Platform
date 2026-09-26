@@ -4,14 +4,23 @@ __pycache__/
 *.pyc
 *.db
 .env
+.env.*
+!*.example
 
 # Node / Frontend
 node_modules/
 dist/
 dist-ssr/
 
-# Editor
+# Uploads & Generated files
+backend/certificates/*.pdf
+backend/uploads/*
+!backend/uploads/.gitkeep
+*.log
+
+# Editor & OS
 .vscode/
-.idea/backups/
+.idea/
 *.dump
-.env
+Thumbs.db
+.DS_Store

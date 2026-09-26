@@ -219,14 +219,29 @@ export default function Events({ currentUser, onEnterArena }) {
                 <div className="event-card-actions" onClick={e => e.stopPropagation()}>
                   {ev.status !== "ended" ? (
                     ev.is_registered ? (
-                      <div className="event-registered-actions"><span className="registered-badge"><FaUserCheck /> Registered</span>{ev.status === "active" && ev.challenge_count > 0 && <button className="primary-btn sm" onClick={() => onEnterArena?.(ev.id)}><FaFlag/> Enter Arena</button>}</div>
+                      <div className="event-registered-actions">
+                        <span className="registered-badge" title={ev.registration_type === "team" ? `Registered with squad ${ev.team_name || ""}` : "Registered as Individual"}>
+                          <FaUserCheck /> {ev.registration_type === "team" ? `Squad: ${ev.team_name || "Team"}` : "Solo"}
+                        </span>
+                        {ev.registration_type !== "team" && (ev.participation_mode === "team" || ev.participation_mode === "both") && myTeam && (
+                          <button
+                            className="secondary-btn sm"
+                            onClick={() => setRegistrationChoice(ev)}
+                            title={`Switch to participating with ${myTeam.name}`}
+                          >
+                            Switch to Squad
+                          </button>
+                        )}
+                        {ev.status === "active" && ev.challenge_count > 0 && (
+                          <button className="primary-btn sm" onClick={() => onEnterArena?.(ev.id)}><FaFlag/> Enter Arena</button>
+                        )}
+                      </div>
                     ) : (
                       <button className="primary-btn sm" onClick={() => {
-                        if ((ev.participation_mode === "team" || ev.participation_mode === "both") && myTeam) setRegistrationChoice(ev);
-                        else if (ev.participation_mode === "team") alert("Create or join a squad before registering for this team tournament.");
+                        if (ev.participation_mode === "team" || ev.participation_mode === "both") setRegistrationChoice(ev);
                         else handleRegister(ev.id);
                       }}>
-                        Register {ev.participation_mode === "team" ? "Squad" : "Free"}
+                        Register {ev.participation_mode === "team" ? "Squad" : ev.participation_mode === "both" ? "Event" : "Free"}
                       </button>
                     )
                   ) : (
@@ -319,19 +334,39 @@ export default function Events({ currentUser, onEnterArena }) {
       {registrationChoice && (
         <div className="modal-backdrop" onClick={() => setRegistrationChoice(null)}>
           <div className="table-card" style={{ maxWidth: 480, width: "92%" }} onClick={e => e.stopPropagation()}>
-            <h3>Register for {registrationChoice.name}</h3>
-            <p className="subtitle">Participation mode: <b>{registrationChoice.participation_mode}</b></p>
+            <h3>Tournament Participation</h3>
+            <p className="subtitle" style={{ marginBottom: "16px" }}>
+              Event: <b>{registrationChoice.name}</b><br />
+              Mode: <span style={{ textTransform: "uppercase", color: "#38bdf8", fontWeight: "bold" }}>{registrationChoice.participation_mode}</span>
+            </p>
             {registrationChoice.participation_mode === "both" && (
-              <button className="secondary-btn" style={{ marginBottom: 12 }} onClick={() => handleRegister(registrationChoice.id)}>Register Individually</button>
+              <button
+                className="secondary-btn"
+                style={{ marginBottom: "12px", width: "100%", justifyContent: "center" }}
+                onClick={() => handleRegister(registrationChoice.id)}
+              >
+                Compete Solo (Individual)
+              </button>
             )}
             {myTeam ? (
-              <button className="primary-btn" onClick={() => handleRegister(registrationChoice.id, myTeam.id)}>
-                Register as <b>{myTeam.name}</b>
+              <button
+                className="primary-btn"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => handleRegister(registrationChoice.id, myTeam.id)}
+              >
+                Compete with Squad: <b>{myTeam.name}</b>
               </button>
             ) : (
-              <p>No squad found. Open Squad Hub to create or join one.</p>
+              <div style={{ padding: "12px 16px", background: "rgba(255,255,255,0.04)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", marginBottom: "12px" }}>
+                <p style={{ margin: "0 0 4px 0", fontWeight: 600 }}>Not in a squad yet?</p>
+                <small style={{ color: "#94a3b8", display: "block" }}>
+                  Visit the <b>Squads Hub</b> to create a new squad or send a join request to an existing one.
+                </small>
+              </div>
             )}
-            <button className="back-link" onClick={() => setRegistrationChoice(null)}>Cancel</button>
+            <button className="back-link" style={{ marginTop: "12px", display: "block", textAlign: "center", width: "100%" }} onClick={() => setRegistrationChoice(null)}>
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -386,7 +421,16 @@ export default function Events({ currentUser, onEnterArena }) {
               <button className="secondary-btn" onClick={() => window.print()}>
                 <FaPrint /> Print
               </button>
-              <a className="secondary-btn" href={`${api.defaults.baseURL}${activeCert.verification_url}`} target="_blank" rel="noreferrer">
+              <a
+                className="secondary-btn"
+                href={
+                  activeCert.verification_url?.startsWith("http")
+                    ? activeCert.verification_url
+                    : `${api.defaults.baseURL || "http://localhost:8000"}${activeCert.verification_url?.startsWith("/") ? "" : "/"}${activeCert.verification_url || `verify/certificate/${activeCert.certificate_id}/page`}`
+                }
+                target="_blank"
+                rel="noreferrer"
+              >
                 <FaExternalLinkAlt /> Verify Certificate
               </a>
             </div>

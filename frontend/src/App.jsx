@@ -71,13 +71,28 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    api.get("/notifications").then(r => setUnreadNotifications(r.data.unread || 0)).catch(() => {});
+    api.get("/notifications").then(r => setUnreadNotifications(r.data.unread || 0)).catch(() => { });
   }, [user]);
 
   // Sync URL hash whenever activePage changes
   useEffect(() => {
+    // Do not overwrite special authentication hashes.
+    // Auth.jsx needs these hashes to complete verification,
+    // password reset, and Google OAuth.
+    const hash = window.location.hash;
+
+    const isAuthCallback =
+      hash.startsWith("#oauth-callback?") ||
+      hash.startsWith("#verify-email?") ||
+      hash.startsWith("#reset-password?");
+
+    if (isAuthCallback) {
+      return;
+    }
+
     window.location.hash = activePage;
     localStorage.setItem("ctf_page", activePage);
+
     if (viewTargetUserId) {
       localStorage.setItem("ctf_target_user", String(viewTargetUserId));
     } else {
@@ -132,6 +147,7 @@ export default function App() {
         theme={theme}
         setTheme={setTheme}
         onOpenProfile={(uid) => navigateTo("profile", uid || user.id)}
+        onNavigateHome={() => navigateTo("dashboard")}
         unreadNotifications={unreadNotifications}
         onOpenNotifications={() => navigateTo("notifications")}
       />
@@ -179,7 +195,7 @@ export default function App() {
               <FaUsers className="nav-icon" /><span>Squad Hub</span>
             </button>
             <button className={`nav-link ${activePage === "notifications" ? "active" : ""}`} onClick={() => navigateTo("notifications")}>
-              <span className="nav-icon-wrap"><FaBell className="nav-icon"/>{unreadNotifications>0 && <em className="nav-unread">{unreadNotifications}</em>}</span><span>Notifications</span>
+              <span className="nav-icon-wrap"><FaBell className="nav-icon" />{unreadNotifications > 0 && <em className="nav-unread">{unreadNotifications}</em>}</span><span>Notifications</span>
             </button>
           </div>
 
