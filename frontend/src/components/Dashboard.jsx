@@ -79,36 +79,41 @@ export default function Dashboard({ user, onNavigate }) {
     });
   }, [challenges, user?.skills]);
 
+  const currentHour = new Date().getHours();
+  const greeting = currentHour < 12 ? "Good morning" : currentHour < 17 ? "Good afternoon" : "Good evening";
+  const firstName = user?.name ? user.name.split(" ")[0] : "Student";
+
   return (
     <div className="dashboard-page">
       <section className="dashboard-hero">
         <div className="hero-grid-bg" />
         <div className="dashboard-hero-copy">
-          <span className="eyebrow"><FaBolt /> OPERATOR COMMAND CENTER</span>
-          <h1>Welcome back, <span>{user.name.split(" ")[0]}</span>.</h1>
-          <p>Train your offensive security skills, capture flags, achieve first bloods, and compete with the campus.</p>
+          <span className="eyebrow"><FaBolt /> OWASP PCCOE &bull; CTF ACADEMY</span>
+          <h1>{greeting}, <span>{firstName}</span></h1>
+          <p className="dashboard-hero-welcome">Welcome to OWASP PCCOE CTF Academy.</p>
+          <p className="dashboard-hero-tagline">Continue your cybersecurity journey. Solve challenges, practice skills, and compete with PCCOE students.</p>
           <div className="hero-actions">
-            <button className="primary-btn" onClick={() => onNavigate("challenges")}><FaFlag /> Enter Practice Arena</button>
-            <button className="secondary-btn" onClick={() => onNavigate("events")}><FaCalendarAlt /> View Events</button>
+            <button className="primary-btn" onClick={() => onNavigate("challenges")}><FaFlag /> Explore Challenges</button>
+            <button className="secondary-btn" onClick={() => onNavigate("events")}><FaCalendarAlt /> Upcoming Events</button>
           </div>
         </div>
         <div className="dashboard-terminal">
-          <div className="terminal-bar"><span /><span /><span /><b>owasp@arena:~</b></div>
+          <div className="terminal-bar"><span /><span /><span /><b>pccoe@owasp-ctf:~</b></div>
           <div className="terminal-body">
             <div><i>$ whoami</i></div><strong>{user.name.toLowerCase().replace(/\s+/g, ".")}</strong>
             <div><i>$ status --brief</i></div>
             <div className="terminal-ok">ONLINE · {user.points} PTS · {user.challenges_solved} FLAGS</div>
-            <div><i>$ mission</i></div><div>Conquer vulnerabilities. Hunt first blood. Defend campus.</div>
+            <div><i>$ mission</i></div><div>Learn. Solve. Compete. Grow with OWASP PCCOE.</div>
             <span className="terminal-cursor">▌</span>
           </div>
         </div>
       </section>
 
       <section className="stat-strip">
-        <div className="dashboard-stat"><span><FaTrophy /></span><div><small>GLOBAL RANK</small><b>#{user.global_rank || "—"}</b></div></div>
+        <div className="dashboard-stat"><span><FaTrophy /></span><div><small>COMMUNITY RANK</small><b>#{user.global_rank || "—"}</b></div></div>
         <div className="dashboard-stat"><span><FaFlag /></span><div><small>FLAGS CAPTURED</small><b>{user.challenges_solved}</b></div></div>
         <div className="dashboard-stat"><span><FaFire /></span><div><small>SCORE</small><b>{user.points} XP</b></div></div>
-        <div className="dashboard-stat"><span><FaLayerGroup /></span><div><small>ARENA PROGRESS</small><b>{progress}%</b></div></div>
+        <div className="dashboard-stat"><span><FaLayerGroup /></span><div><small>ACADEMY PROGRESS</small><b>{progress}%</b></div></div>
       </section>
 
       <section className="dashboard-grid">

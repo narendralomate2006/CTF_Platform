@@ -11,6 +11,7 @@ import Auth from "./components/Auth";
 import Squads from "./components/Squads";
 import Notifications from "./components/Notifications";
 import TournamentArena from "./components/TournamentArena";
+import Footer from "./components/Footer";
 
 import {
   FaFlag,
@@ -121,8 +122,9 @@ export default function App() {
     return (
       <div className={`app-root ${theme}`}>
         <div className="full-screen-loader">
-          <FaShieldAlt className="pulse-icon" />
-          <h2>Booting College OWASP CTF Arena...</h2>
+          <img src="/branding/owasp-pccoe-logo.png" alt="OWASP PCCOE Logo" className="pulse-icon loader-logo" />
+          <h2>OWASP PCCOE CTF Academy</h2>
+          <p className="loader-sub">Loading cybersecurity platform...</p>
         </div>
       </div>
     );
@@ -156,8 +158,17 @@ export default function App() {
       <div className="app-container">
         {/* Sidebar Navigation */}
         <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
+          {/* Official OWASP PCCOE Sidebar Brand */}
+          <div className="sidebar-brand-card" onClick={() => navigateTo("dashboard")}>
+            <img src="/branding/owasp-pccoe-logo.png" alt="OWASP PCCOE Logo" className="sidebar-logo-img" />
+            <div className="sidebar-brand-info">
+              <span className="sidebar-brand-top">OWASP PCCOE</span>
+              <span className="sidebar-brand-sub">CTF Academy</span>
+            </div>
+          </div>
+
           <div className="sidebar-section">
-            <span className="sidebar-heading">COMMAND DECK</span>
+            <span className="sidebar-heading">NAVIGATION</span>
 
             <button
               className={`nav-link ${activePage === "dashboard" ? "active" : ""}`}
@@ -172,15 +183,7 @@ export default function App() {
               onClick={() => navigateTo("challenges")}
             >
               <FaFlag className="nav-icon" />
-              <span>Practice Arena</span>
-            </button>
-
-            <button
-              className={`nav-link ${activePage === "leaderboard" ? "active" : ""}`}
-              onClick={() => navigateTo("leaderboard")}
-            >
-              <FaTrophy className="nav-icon" />
-              <span>Leaderboards</span>
+              <span>Challenges</span>
             </button>
 
             <button
@@ -188,7 +191,15 @@ export default function App() {
               onClick={() => navigateTo("events")}
             >
               <FaCalendarAlt className="nav-icon" />
-              <span>Tournaments & Events</span>
+              <span>Events & Tournaments</span>
+            </button>
+
+            <button
+              className={`nav-link ${activePage === "leaderboard" ? "active" : ""}`}
+              onClick={() => navigateTo("leaderboard")}
+            >
+              <FaTrophy className="nav-icon" />
+              <span>Leaderboard</span>
             </button>
 
             <button className={`nav-link ${activePage === "squads" ? "active" : ""}`} onClick={() => navigateTo("squads")}>
@@ -200,20 +211,20 @@ export default function App() {
           </div>
 
           <div className="sidebar-section">
-            <span className="sidebar-heading">MY PROFILE</span>
+            <span className="sidebar-heading">ACCOUNT</span>
 
             <button
               className={`nav-link ${activePage === "profile" && viewTargetUserId === user.id ? "active" : ""}`}
               onClick={() => navigateTo("profile", user.id)}
             >
               <FaUser className="nav-icon" />
-              <span>LeetCode Profile</span>
+              <span>My Profile</span>
             </button>
           </div>
 
           {(user.role === "admin" || user.role === "moderator") && (
             <div className="sidebar-section">
-              <span className="sidebar-heading">OWASP CLUB CONTROLS</span>
+              <span className="sidebar-heading">ADMINISTRATION</span>
 
               <button
                 className={`nav-link admin-link ${activePage === "admin" ? "active" : ""}`}
@@ -228,10 +239,11 @@ export default function App() {
           {/* Quick Stats Footer */}
           <div className="sidebar-footer">
             <div className="club-tag">
-              <FaShieldAlt /> OWASP STUDENT CHAPTER
+              <img src="/branding/owasp-pccoe-logo.png" alt="OWASP PCCOE Logo" style={{ width: "16px", height: "16px", objectFit: "contain" }} />
+              <span>OWASP PCCOE</span>
             </div>
             <div className="user-score-box">
-              <span className="score-label">My Global Rank</span>
+              <span className="score-label">Community Rank</span>
               <b className="score-val">#{user.global_rank || 1}</b>
             </div>
           </div>
@@ -260,7 +272,6 @@ export default function App() {
             />
           )}
 
-
           {activePage === "squads" && <Squads currentUser={user} />}
           {activePage === "notifications" && <Notifications onCountChange={setUnreadNotifications} />}
           {activePage === "arena" && arenaEventId && <TournamentArena eventId={arenaEventId} onBack={() => navigateTo("events")} />}
@@ -276,6 +287,9 @@ export default function App() {
           {activePage === "admin" && (user.role === "admin" || user.role === "moderator") && (
             <Admin />
           )}
+
+          {/* Dedicated Platform Footer */}
+          <Footer onNavigate={navigateTo} />
         </main>
       </div>
     </div>

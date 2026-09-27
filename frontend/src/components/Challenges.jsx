@@ -519,9 +519,20 @@ export default function Challenges({ currentUser, onUserUpdated }) {
       {/* Header Banner */}
       <div className="section-header">
         <div>
-          <h2>Security Challenge Arena</h2>
+          <div className="platform-breadcrumb">
+            <span>OWASP PCCOE CTF Academy</span>
+            <span className="breadcrumb-sep">/</span>
+            <span>Challenges</span>
+            {selectedCategory !== "All" && (
+              <>
+                <span className="breadcrumb-sep">/</span>
+                <span>{selectedCategory}</span>
+              </>
+            )}
+          </div>
+          <h2>OWASP PCCOE Challenges</h2>
           <p className="subtitle">
-            Practice real-world cybersecurity problems. Exploit vulnerabilities, capture flags, climb rankings.
+            Practice real-world cybersecurity problems curated for the OWASP PCCOE community.
           </p>
         </div>
 
@@ -804,6 +815,15 @@ export default function Challenges({ currentUser, onUserUpdated }) {
 
             {/* Modal Header */}
             <div className="modal-header">
+              <div className="challenge-breadcrumb">
+                <span>OWASP PCCOE CTF Academy</span>
+                <span className="breadcrumb-sep">/</span>
+                <span>Challenges</span>
+                <span className="breadcrumb-sep">/</span>
+                <span>{activeModalChall.category}</span>
+                <span className="breadcrumb-sep">/</span>
+                <span className="breadcrumb-active">{activeModalChall.title}</span>
+              </div>
               <div className="modal-tags">
                 <span className="category-tag">{activeModalChall.category}</span>
                 <span className={`difficulty-tag ${(activeModalChall.difficulty || "easy").toLowerCase()}`}>

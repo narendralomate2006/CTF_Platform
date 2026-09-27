@@ -154,9 +154,14 @@ export default function Events({ currentUser, onEnterArena }) {
     <div className="events-page">
       <div className="section-header">
         <div>
-          <h2>Live CTF Competitions & Tournaments</h2>
+          <div className="platform-breadcrumb">
+            <span>OWASP PCCOE</span>
+            <span className="breadcrumb-sep">/</span>
+            <span>Competitions & Events</span>
+          </div>
+          <h2>OWASP PCCOE CTF Events</h2>
           <p className="subtitle">
-            Timed jeopardy-style events with live scoreboards, scoreboard freezes, and verification certificates.
+            Timed jeopardy-style competitions, live scoreboards, and verified credentials for the OWASP PCCOE community.
           </p>
         </div>
       </div>

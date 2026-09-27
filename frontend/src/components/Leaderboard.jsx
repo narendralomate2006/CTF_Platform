@@ -53,9 +53,14 @@ export default function Leaderboard({ onSelectUser }) {
       {/* Header */}
       <div className="section-header">
         <div>
-          <h2>Hall of Fame & Leaderboards</h2>
+          <div className="platform-breadcrumb">
+            <span>OWASP PCCOE</span>
+            <span className="breadcrumb-sep">/</span>
+            <span>Rankings</span>
+          </div>
+          <h2>OWASP PCCOE Leaderboard</h2>
           <p className="subtitle">
-            Compete with security researchers across universities and showcase your capture prowess.
+            Track top-performing cybersecurity researchers and students across the OWASP PCCOE community.
           </p>
         </div>
 

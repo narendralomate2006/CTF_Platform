@@ -3,22 +3,24 @@
    ========================================================= */
 
 :root {
-  --bg-primary: #070d18;
-  --bg-secondary: #0c1524;
-  --bg-card: #111d31;
-  --bg-input: #0a1322;
-  --border-color: #1e314b;
-  --border-focus: #55d6be;
+  --bg-primary: #0D1117;
+  --bg-secondary: #161B22;
+  --bg-card: #161B22;
+  --bg-input: #0D1117;
+  --border-color: #30363D;
+  --border-focus: #58a6ff;
   
-  --text-primary: #e6edf8;
-  --text-secondary: #8c9eb5;
-  --text-muted: #5d718b;
+  --text-primary: #F0F6FC;
+  --text-secondary: #8B949E;
+  --text-muted: #6E7681;
   
-  --accent-cyan: #55d6be;
+  --accent-cyan: #58a6ff;
   --accent-indigo: #6366f1;
   --accent-gold: #f59e0b;
   --accent-silver: #94a3b8;
   --accent-bronze: #b45309;
+  --brand-blue: #2f81f7;
+  --brand-blue-hover: #388bfd;
   
   --diff-easy: #10b981;
   --diff-medium: #f59e0b;
@@ -32,7 +34,7 @@
   
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 16px rgba(85, 214, 190, 0.25);
+  --shadow-glow: 0 0 16px rgba(88, 166, 255, 0.25);
   
   --font-main: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Fira Code", "Courier New", monospace;
@@ -4469,6 +4471,346 @@ button {
     margin-left: 0;
   }
 }
+
+/* =========================================================
+   OWASP PCCOE BRAND IDENTITY SYSTEM
+   ========================================================= */
+
+/* Brand Logos in Navbar and Headers */
+.brand-logo-img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px rgba(88, 166, 255, 0.4));
+  transition: transform 0.2s ease;
+}
+
+.brand:hover .brand-logo-img {
+  transform: scale(1.08);
+}
+
+/* Sidebar Brand Card */
+.sidebar-brand-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin: 4px 8px 14px;
+  background: rgba(22, 27, 34, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-brand-card:hover {
+  background: rgba(47, 129, 247, 0.1);
+  border-color: rgba(88, 166, 255, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 5px rgba(88, 166, 255, 0.3));
+}
+
+.sidebar-brand-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.sidebar-brand-pccoe {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+}
+
+.sidebar-brand-academy {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--accent-cyan);
+}
+
+/* Loader Screen Brand */
+.loader-logo {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  margin-bottom: 16px;
+  animation: pulse-logo 2s infinite ease-in-out;
+  filter: drop-shadow(0 0 14px rgba(88, 166, 255, 0.5));
+}
+
+@keyframes pulse-logo {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.95;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+/* Platform Breadcrumbs */
+.platform-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin-bottom: 18px;
+  font-family: var(--font-mono);
+}
+
+.platform-breadcrumb .breadcrumb-link {
+  color: var(--accent-cyan);
+  cursor: pointer;
+  transition: color 0.15s ease;
+  font-weight: 600;
+}
+
+.platform-breadcrumb .breadcrumb-link:hover {
+  text-decoration: underline;
+  color: #79c0ff;
+}
+
+.platform-breadcrumb .breadcrumb-sep {
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.platform-breadcrumb .breadcrumb-active {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Challenge Modal Breadcrumb */
+.challenge-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  margin-bottom: 12px;
+}
+
+.challenge-breadcrumb span {
+  color: var(--text-muted);
+}
+
+.challenge-breadcrumb b {
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+/* Profile Community Affiliation Badge */
+.profile-community-affiliation {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: rgba(47, 129, 247, 0.08);
+  border: 1px solid rgba(88, 166, 255, 0.25);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.affiliation-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.affiliation-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.affiliation-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+}
+
+.affiliation-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Auth Page Brand Enhancements */
+.hero-brand-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.hero-brand-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(88, 166, 255, 0.45));
+}
+
+.hero-brand-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  background: rgba(88, 166, 255, 0.12);
+  color: #58a6ff;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  text-transform: uppercase;
+}
+
+.hero-pillars {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.hero-pillar-chip {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 5px 12px;
+  border-radius: 6px;
+}
+
+.auth-card-top-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.auth-card-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.auth-card-brand-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+/* Platform Footer */
+.platform-footer {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  padding: 36px 28px 24px;
+  margin-top: 64px;
+  position: relative;
+  z-index: 5;
+}
+
+.footer-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.footer-brand-block {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.footer-logo {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px rgba(88, 166, 255, 0.3));
+}
+
+.footer-brand-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.4px;
+}
+
+.footer-brand-tagline {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.footer-nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.footer-nav-link {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 6px;
+  transition: color 0.15s ease;
+}
+
+.footer-nav-link:hover {
+  color: var(--accent-cyan);
+}
+
+.footer-bottom {
+  max-width: 1280px;
+  margin: 24px auto 0;
+  padding-top: 18px;
+  border-top: 1px solid rgba(48, 54, 61, 0.6);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.footer-powered {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .footer-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 
 
 

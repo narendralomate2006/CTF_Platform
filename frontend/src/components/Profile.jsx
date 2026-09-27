@@ -171,9 +171,15 @@ export default function Profile({ targetUserId, currentUserId, onBackToPractice 
 
         <div className="profile-main-info">
           <div className="name-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <h2>{profile.name}</h2>
-              <span className="role-tag">{profile.role.toUpperCase()}</span>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <h2>{profile.name}</h2>
+                <span className="role-tag">{profile.role.toUpperCase()}</span>
+              </div>
+              <div className="profile-community-affiliation">
+                <img src="/branding/owasp-pccoe-logo.png" alt="OWASP PCCOE" style={{ width: "16px", height: "16px", objectFit: "contain" }} />
+                <span>OWASP PCCOE CTF Academy</span>
+              </div>
             </div>
             {isSelf && (
               <button className="secondary-btn sm" onClick={startEditing}>

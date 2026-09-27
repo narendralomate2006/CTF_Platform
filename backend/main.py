@@ -2690,11 +2690,11 @@ DEFAULT_CERT_CONFIG = {
     "name_font_size": 32,
     "body_font_size": 12,
     "alignment": "center",
-    "header_text": "COLLEGE OWASP STUDENT CHAPTER",
+    "header_text": "OWASP PCCOE STUDENT CHAPTER",
     "title_text": "Certificate of CTF Participation & Achievement",
     "subtitle_text": "This certificate is proudly presented to",
     "custom_body_text": "for participating in {event_name} and capturing {solves} flag(s) for {score} points.",
-    "signature_title": "OWASP Lead & Faculty Coordinator",
+    "signature_title": "OWASP PCCOE Lead & Faculty Coordinator",
     "signer_name": "",
     "second_signature_title": "",
     "second_signer_name": "",
@@ -2960,7 +2960,7 @@ def build_certificate_pdf(
     # 1. Organization Header Text
     title_fs = int(cfg.get("title_font_size") or 24)
     if cfg.get("show_header", True):
-        header_text = cfg.get("header_text", "COLLEGE OWASP STUDENT CHAPTER")
+        header_text = cfg.get("header_text", "OWASP PCCOE STUDENT CHAPTER")
         if header_text:
             c.setFillColor(accent_c)
             c.setFont(bold_font, max(13, int(title_fs * 0.85)))
@@ -3076,7 +3076,7 @@ def build_certificate_pdf(
     # 9. Primary Signature
     has_second = cfg.get("show_second_signature", False)
     if cfg.get("show_signature", True):
-        sig_title = cfg.get("signature_title", "OWASP Lead & Faculty Coordinator")
+        sig_title = cfg.get("signature_title", "OWASP PCCOE Lead & Faculty Coordinator")
         signer_name = cfg.get("signer_name", "")
         sig_path = get_cert_asset_path(scope, "signature")
         ppos = get_pos("primary_signature", 78, 85)
