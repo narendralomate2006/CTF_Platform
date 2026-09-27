@@ -15,6 +15,8 @@ import logging
 from email.message import EmailMessage
 from urllib.parse import urlencode
 from pathlib import Path
+import csv
+import io
 
 import storage
 from observability import configure_logging, record_request, snapshot
@@ -23,10 +25,10 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Query, Request, Upl
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi import status as http_status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import func, desc, or_
+from sqlalchemy import func, desc, or_, distinct
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from pwdlib import PasswordHash
@@ -279,6 +281,14 @@ def upgrade_sqlite_schema():
                 conn.execute(text("ALTER TABLE challenges ADD COLUMN runtime_protocol VARCHAR(20) NOT NULL DEFAULT 'http'"))
             if "instance_timeout_minutes" not in cols:
                 conn.execute(text("ALTER TABLE challenges ADD COLUMN instance_timeout_minutes INTEGER NOT NULL DEFAULT 60"))
+            if "scoring_mode" not in cols:
+                conn.execute(text("ALTER TABLE challenges ADD COLUMN scoring_mode VARCHAR(20) NOT NULL DEFAULT 'static'"))
+            if "initial_points" not in cols:
+                conn.execute(text("ALTER TABLE challenges ADD COLUMN initial_points INTEGER NOT NULL DEFAULT 100"))
+            if "min_points" not in cols:
+                conn.execute(text("ALTER TABLE challenges ADD COLUMN min_points INTEGER NOT NULL DEFAULT 50"))
+            if "decay_limit" not in cols:
+                conn.execute(text("ALTER TABLE challenges ADD COLUMN decay_limit INTEGER NOT NULL DEFAULT 20"))
     if "certificates" not in tables:
         # New installations get this from create_all; old databases are handled by create_all.
         pass
@@ -365,6 +375,14 @@ def upgrade_database_schema():
             statements.append("ALTER TABLE challenges ADD COLUMN IF NOT EXISTS runtime_protocol VARCHAR(20) NOT NULL DEFAULT 'http'")
         if "instance_timeout_minutes" not in cols:
             statements.append("ALTER TABLE challenges ADD COLUMN IF NOT EXISTS instance_timeout_minutes INTEGER NOT NULL DEFAULT 60")
+        if "scoring_mode" not in cols:
+            statements.append("ALTER TABLE challenges ADD COLUMN IF NOT EXISTS scoring_mode VARCHAR(20) NOT NULL DEFAULT 'static'")
+        if "initial_points" not in cols:
+            statements.append("ALTER TABLE challenges ADD COLUMN IF NOT EXISTS initial_points INTEGER NOT NULL DEFAULT 100")
+        if "min_points" not in cols:
+            statements.append("ALTER TABLE challenges ADD COLUMN IF NOT EXISTS min_points INTEGER NOT NULL DEFAULT 50")
+        if "decay_limit" not in cols:
+            statements.append("ALTER TABLE challenges ADD COLUMN IF NOT EXISTS decay_limit INTEGER NOT NULL DEFAULT 20")
     if "events" in tables:
         cols = {c["name"] for c in inspector.get_columns("events")}
         if "participation_mode" not in cols:
@@ -904,6 +922,10 @@ class ChallengeCreate(BaseModel):
     runtime_port: Optional[int] = None
     runtime_protocol: str = "http"
     instance_timeout_minutes: int = 60
+    scoring_mode: str = "static"
+    initial_points: Optional[int] = 100
+    min_points: Optional[int] = 50
+    decay_limit: Optional[int] = 20
 
 
 class ChallengeUpdate(BaseModel):
@@ -924,8 +946,12 @@ class ChallengeUpdate(BaseModel):
     event_id: Optional[int] = None
     runtime_image: Optional[str] = None
     runtime_port: Optional[int] = None
-    runtime_protocol: str = "http"
-    instance_timeout_minutes: int = 60
+    runtime_protocol: Optional[str] = None
+    instance_timeout_minutes: Optional[int] = None
+    scoring_mode: Optional[str] = None
+    initial_points: Optional[int] = None
+    min_points: Optional[int] = None
+    decay_limit: Optional[int] = None
     is_active: Optional[bool] = None
 
 
@@ -1674,6 +1700,12 @@ def get_challenge(
     solves = challenge.solves_count or 0
     acceptance_rate = round((solves / total_attempts * 100), 1) if total_attempts > 0 else (100.0 if solves > 0 else 0.0)
 
+    event_ended = False
+    if challenge.event_id:
+        ev = db.query(Event).filter(Event.id == challenge.event_id).first()
+        if ev and (not ev.is_active or ev.end_date < datetime.utcnow()):
+            event_ended = True
+
     return {
         "success": True,
         "challenge": {
@@ -1697,7 +1729,12 @@ def get_challenge(
             "acceptance_rate": acceptance_rate,
             "is_solved": is_solved,
             "first_blood": first_blood,
-            "has_writeup": bool(challenge.writeup)
+            "has_writeup": bool(challenge.writeup),
+            "event_ended": event_ended,
+            "scoring_mode": getattr(challenge, "scoring_mode", "static") or "static",
+            "initial_points": getattr(challenge, "initial_points", challenge.points) or challenge.points,
+            "min_points": getattr(challenge, "min_points", 50) or 50,
+            "decay_limit": getattr(challenge, "decay_limit", 20) or 20
         }
     }
 
@@ -1917,7 +1954,16 @@ def submit_flag(
         correct = secure_str_equals(submitted_flag, expected_flag) or secure_str_equals(submitted_flag, challenge.flag)
     else:
         correct = secure_str_equals(submitted_flag, challenge.flag)
-    points_awarded = challenge.points if correct else 0
+    current_pts = challenge.points
+    if getattr(challenge, "scoring_mode", "static") == "decaying":
+        init_pts = getattr(challenge, "initial_points", challenge.points) or challenge.points
+        min_pts = getattr(challenge, "min_points", 50) or 50
+        decay_lim = getattr(challenge, "decay_limit", 20) or 20
+        solves_so_far = challenge.solves_count or 0
+        ratio = min(solves_so_far, decay_lim) / max(1, decay_lim)
+        current_pts = max(min_pts, int(init_pts - ((init_pts - min_pts) * ratio)))
+
+    points_awarded = current_pts if correct else 0
 
     submission = Submission(
         user_id=current_user.id,
@@ -1956,20 +2002,27 @@ def submit_flag(
 
         redis_delete(f"leaderboard:users:{current_user.id}", "leaderboard:colleges")
         if scoring_team:
-            scoring_team.points += challenge.points
+            scoring_team.points += points_awarded
             scoring_team.challenges_solved += 1
-            solve_msg = f"🩸 FIRST BLOOD! {scoring_team.name} achieved the first solve on {challenge.title} (+{challenge.points} pts)!" if is_first_blood else f"{scoring_team.name} solved {challenge.title} and earned {challenge.points} points."
+            solve_msg = f"🩸 FIRST BLOOD! {scoring_team.name} achieved the first solve on {challenge.title} (+{points_awarded} pts)!" if is_first_blood else f"{scoring_team.name} solved {challenge.title} and earned {points_awarded} points."
             db.add(Notification(user_id=current_user.id, title="First Blood Captured! 🩸" if is_first_blood else "Squad flag captured", message=solve_msg, kind="solve"))
             for member in scoring_team.members:
                 if member.user_id != current_user.id:
                     db.add(Notification(user_id=member.user_id, title="Squad First Blood! 🩸" if is_first_blood else "Squad flag captured", message=f"{scoring_team.name} achieved First Blood on {challenge.title} through {current_user.name}!" if is_first_blood else f"{scoring_team.name} solved {challenge.title} through {current_user.name}.", kind="solve"))
         else:
-            current_user.points += challenge.points
+            current_user.points += points_awarded
             current_user.challenges_solved += 1
             check_and_award_badges(current_user, db)
-            solve_msg = f"🩸 FIRST BLOOD! You were the first to conquer {challenge.title} (+{challenge.points} pts)!" if is_first_blood else f"You solved {challenge.title} and earned {challenge.points} points."
+            solve_msg = f"🩸 FIRST BLOOD! You were the first to conquer {challenge.title} (+{points_awarded} pts)!" if is_first_blood else f"You solved {challenge.title} and earned {points_awarded} points."
             db.add(Notification(user_id=current_user.id, title="First Blood Captured! 🩸" if is_first_blood else "Flag captured", message=solve_msg, kind="solve"))
         challenge.solves_count += 1
+        if getattr(challenge, "scoring_mode", "static") == "decaying":
+            init_pts = getattr(challenge, "initial_points", challenge.points) or challenge.points
+            min_pts = getattr(challenge, "min_points", 50) or 50
+            decay_lim = getattr(challenge, "decay_limit", 20) or 20
+            new_solves = challenge.solves_count
+            new_ratio = min(new_solves, decay_lim) / max(1, decay_lim)
+            challenge.points = max(min_pts, int(init_pts - ((init_pts - min_pts) * new_ratio)))
 
     db.commit()
 
@@ -2000,15 +2053,15 @@ def get_writeup(
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")
 
-    # Access allowed if admin OR solved
-    is_solved = db.query(Submission).filter(
-        Submission.user_id == current_user.id,
-        Submission.challenge_id == challenge_id,
-        Submission.is_correct == True
-    ).first() is not None
+    # Access allowed if admin OR solved OR if event has closed
+    event_closed = False
+    if challenge.event_id:
+        ev = db.query(Event).filter(Event.id == challenge.event_id).first()
+        if ev and (not ev.is_active or ev.end_date < datetime.utcnow()):
+            event_closed = True
 
-    if not is_solved and current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Writeup is locked! You must solve this challenge first.")
+    if not is_solved and not event_closed and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Writeup is locked! You must solve this challenge first or wait until the event closes.")
 
     return {
         "success": True,
@@ -2255,12 +2308,61 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)):
 def get_leaderboard(
     college: Optional[str] = None,
     category: Optional[str] = None,
+    time_range: Optional[str] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
+    # Filter by category or time_range if specified
+    if (category and category != "all") or (time_range and time_range != "all"):
+        sub_query = db.query(
+            User.id.label("id"),
+            User.name.label("name"),
+            User.college.label("college"),
+            User.joined_at.label("joined_at"),
+            func.coalesce(func.sum(Submission.points_awarded), 0).label("points"),
+            func.count(distinct(Submission.challenge_id)).label("challenges_solved")
+        ).join(Submission, Submission.user_id == User.id)\
+         .join(Challenge, Challenge.id == Submission.challenge_id)\
+         .filter(User.role == "user", User.is_active == True, Submission.is_correct == True)
+
+        if category and category != "all":
+            sub_query = sub_query.filter(Challenge.category == category)
+        if time_range == "week":
+            sub_query = sub_query.filter(Submission.submitted_at >= datetime.utcnow() - timedelta(days=7))
+        elif time_range == "month":
+            sub_query = sub_query.filter(Submission.submitted_at >= datetime.utcnow() - timedelta(days=30))
+        if college:
+            sub_query = sub_query.filter(User.college.ilike(f"%{college}%"))
+        if search:
+            sub_query = sub_query.filter(
+                or_(
+                    User.name.ilike(f"%{search}%"),
+                    User.college.ilike(f"%{search}%")
+                )
+            )
+
+        grouped = sub_query.group_by(User.id, User.name, User.college, User.joined_at).order_by(
+            desc("points"),
+            desc("challenges_solved"),
+            User.joined_at.asc()
+        ).all()
+
+        result = []
+        for rank, u in enumerate(grouped, start=1):
+            result.append({
+                "rank": rank,
+                "id": u.id,
+                "name": u.name,
+                "college": u.college or "Independent",
+                "points": int(u.points),
+                "challenges_solved": int(u.challenges_solved),
+                "joined_at": u.joined_at
+            })
+        return {"success": True, "count": len(result), "leaderboard": result}
+
     query = db.query(User).filter(User.role == "user", User.is_active == True)
 
-    if not college and not category and not search:
+    if not college and not category and not search and not time_range:
         cached = redis_get("leaderboard:global")
         if cached:
             try:
@@ -2297,7 +2399,7 @@ def get_leaderboard(
         })
 
     payload = {"success": True, "count": len(result), "leaderboard": result}
-    if not college and not category and not search:
+    if not college and not category and not search and not time_range:
         redis_setex("leaderboard:global", 5, json.dumps(payload, default=str))
     return payload
 
@@ -4467,7 +4569,12 @@ def admin_list_challenges(db: Session = Depends(get_db), admin: User = Depends(r
         "writeup": c.writeup, "file_url": (f"{PUBLIC_API_URL}/challenges/{c.id}/file" if c.file_path else c.file_url), "file_path": bool(c.file_path),
         "connection_info": c.connection_info, "event_id": c.event_id, "solves_count": c.solves_count,
         "is_active": c.is_active, "status": c.status, "flag_mode": c.flag_mode,
-        "has_flag_secret": bool(c.flag_secret), "runtime_image": c.runtime_image, "runtime_port": c.runtime_port, "runtime_protocol": c.runtime_protocol, "instance_timeout_minutes": c.instance_timeout_minutes, "created_at": c.created_at.isoformat()
+        "has_flag_secret": bool(c.flag_secret), "runtime_image": c.runtime_image, "runtime_port": c.runtime_port, "runtime_protocol": c.runtime_protocol, "instance_timeout_minutes": c.instance_timeout_minutes,
+        "scoring_mode": getattr(c, "scoring_mode", "static") or "static",
+        "initial_points": getattr(c, "initial_points", c.points) or c.points,
+        "min_points": getattr(c, "min_points", 50) or 50,
+        "decay_limit": getattr(c, "decay_limit", 20) or 20,
+        "created_at": c.created_at.isoformat()
     } for c in rows]}
 
 
@@ -4505,7 +4612,11 @@ def admin_create_challenge(
         runtime_image=data.runtime_image.strip() if data.runtime_image else None,
         runtime_port=data.runtime_port,
         runtime_protocol=(data.runtime_protocol or "http").lower(),
-        instance_timeout_minutes=max(5, min(data.instance_timeout_minutes or 60, 240))
+        instance_timeout_minutes=max(5, min(data.instance_timeout_minutes or 60, 240)),
+        scoring_mode=data.scoring_mode or "static",
+        initial_points=data.initial_points or data.points,
+        min_points=data.min_points or 50,
+        decay_limit=data.decay_limit or 20
     )
     db.add(ch)
     db.commit()
@@ -4569,6 +4680,14 @@ def admin_update_challenge(
         ch.runtime_protocol = data.runtime_protocol.lower()
     if data.instance_timeout_minutes is not None:
         ch.instance_timeout_minutes = max(5, min(data.instance_timeout_minutes, 240))
+    if data.scoring_mode is not None:
+        ch.scoring_mode = data.scoring_mode
+    if data.initial_points is not None:
+        ch.initial_points = data.initial_points
+    if data.min_points is not None:
+        ch.min_points = data.min_points
+    if data.decay_limit is not None:
+        ch.decay_limit = data.decay_limit
     if data.is_active is not None:
         ch.is_active = data.is_active
 
@@ -4682,19 +4801,24 @@ async def admin_upload_challenge_file(challenge_id: int, file: UploadFile = File
 
 @app.get("/challenges/{challenge_id}/file")
 def challenge_file_download(challenge_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from fastapi.responses import RedirectResponse
     ch = db.query(Challenge).filter(Challenge.id == challenge_id, Challenge.is_active == True, Challenge.status == "published").first()
-    if not ch or not ch.file_path:
-        raise HTTPException(status_code=404, detail="Challenge file not found")
-    if ch.file_path.startswith("s3://"):
-        url = storage.signed_url(ch.file_path)
-        if not url:
-            raise HTTPException(status_code=503, detail="Object storage is unavailable")
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=url, status_code=307)
-    path = Path(ch.file_path)
-    if not path.exists() or not path.is_file():
-        raise HTTPException(status_code=404, detail="Challenge file is missing")
-    return FileResponse(path, filename=path.name, media_type="application/octet-stream")
+    if not ch:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+    # Priority 1: locally uploaded file
+    if ch.file_path:
+        if ch.file_path.startswith("s3://"):
+            url = storage.signed_url(ch.file_path)
+            if not url:
+                raise HTTPException(status_code=503, detail="Object storage is unavailable")
+            return RedirectResponse(url=url, status_code=307)
+        path = Path(ch.file_path)
+        if path.exists() and path.is_file():
+            return FileResponse(path, filename=path.name, media_type="application/octet-stream")
+    # Priority 2: external file_url (redirect)
+    if ch.file_url and ch.file_url.startswith("http"):
+        return RedirectResponse(url=ch.file_url, status_code=302)
+    raise HTTPException(status_code=404, detail="No file attached to this challenge")
 
 
 @app.get("/admin/storage/status")
@@ -4828,3 +4952,76 @@ def admin_delete_event(
     db.delete(ev)
     db.commit()
     return {"success": True, "message": "Event deleted successfully"}
+
+
+@app.get("/admin/events/{event_id}/export")
+def admin_export_event_results(
+    event_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin)
+):
+    ev = db.query(Event).filter(Event.id == event_id).first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    regs = db.query(EventRegistration).filter(EventRegistration.event_id == event_id).all()
+    event_chall_ids = [c.id for c in ev.challenges] if ev.challenges else []
+
+    standings = []
+    for r in regs:
+        u = r.user
+        t = r.team
+        subs = []
+        if event_chall_ids:
+            sub_query = db.query(Submission).filter(
+                Submission.challenge_id.in_(event_chall_ids),
+                Submission.is_correct == True
+            )
+            if t:
+                sub_query = sub_query.filter(Submission.team_id == t.id)
+            else:
+                sub_query = sub_query.filter(Submission.user_id == u.id)
+            subs = sub_query.order_by(Submission.submitted_at.desc()).all()
+
+        score = sum(s.points_awarded for s in subs)
+        solves = len(subs)
+        last_solve = subs[0].submitted_at.isoformat() if subs else "—"
+
+        standings.append({
+            "name": t.name if t else (u.name if u else "Unknown"),
+            "type": "Squad" if t else "Solo",
+            "email": u.email if u else "—",
+            "college": (u.college if u and u.college else "PCCOE / Independent"),
+            "solves": solves,
+            "score": score,
+            "last_solve": last_solve
+        })
+
+    standings.sort(key=lambda x: (x["score"], x["solves"]), reverse=True)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Rank", "Participant / Squad", "Registration Type", "Contact Email",
+        "College / Affiliation", "Solves Count", "Total Score", "Last Solve Timestamp"
+    ])
+    for rank, item in enumerate(standings, start=1):
+        writer.writerow([
+            rank,
+            item["name"],
+            item["type"],
+            item["email"],
+            item["college"],
+            item["solves"],
+            item["score"],
+            item["last_solve"]
+        ])
+
+    csv_data = output.getvalue()
+    safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', ev.name)
+    filename = f"event_{event_id}_{safe_name}_standings.csv"
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )

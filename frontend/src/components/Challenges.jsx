@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { api, getToken } from "../api";
+import { api, getToken, API_URL } from "../api";
 import {
   FaFlag,
   FaCheckCircle,
@@ -20,19 +20,8 @@ import {
   FaStop,
   FaTint,
   FaFire,
-  FaSortAmountDown,
-  FaTrophy,
-  FaGlobe,
-  FaKey,
-  FaCogs,
-  FaSkull,
-  FaUserSecret,
-  FaFileImage,
-  FaCube,
-  FaThLarge,
-  FaFilter,
-  FaBullseye,
-  FaBolt
+  FaArrowLeft,
+  FaSyncAlt
 } from "react-icons/fa";
 
 function timeAgo(dateStr) {
@@ -46,92 +35,6 @@ function timeAgo(dateStr) {
   return `${Math.floor(diffHr / 24)}d ago`;
 }
 
-export const TRACKS_METADATA = [
-  {
-    category: "All",
-    label: "All Tracks",
-    shortCode: "ALL",
-    icon: FaThLarge,
-    color: "#55d6be",
-    description: "Full spectrum arena challenges across all offensive security domains",
-    topics: ["Full Spectrum", "Multi-Domain", "CTF All-Stars"]
-  },
-  {
-    category: "Web Exploitation",
-    label: "Web Exploitation",
-    shortCode: "WEB // 01",
-    icon: FaGlobe,
-    color: "#38bdf8",
-    description: "Client & server vulnerabilities, injections, auth flaws, and API compromises",
-    topics: ["XSS", "SQLi", "SSRF", "IDOR", "Auth Bypass"]
-  },
-  {
-    category: "Cryptography",
-    label: "Cryptography",
-    shortCode: "CRYPTO // 02",
-    icon: FaKey,
-    color: "#a855f7",
-    description: "Classic ciphers, modern asymmetric RSA, elliptic curves, and key recovery",
-    topics: ["RSA", "AES", "ECC", "Hash Collisions", "PRNG"]
-  },
-  {
-    category: "Forensics",
-    label: "Digital Forensics",
-    shortCode: "DFIR // 03",
-    icon: FaSearch,
-    color: "#10b981",
-    description: "Network packet dumps, memory captures, disk images, and incident artifacts",
-    topics: ["PCAP", "Volatility", "Disk Carving", "Memory Dumps"]
-  },
-  {
-    category: "Reverse Engineering",
-    label: "Reverse Engineering",
-    shortCode: "REV // 04",
-    icon: FaCogs,
-    color: "#f59e0b",
-    description: "Decompiling binaries, assembly analysis, anti-debugging, and firmware reversing",
-    topics: ["Ghidra", "IDA", "x86_64", "Bytecode", "Anti-Debug"]
-  },
-  {
-    category: "Pwn/Binary Exploitation",
-    label: "Binary Exploitation",
-    shortCode: "PWN // 05",
-    icon: FaSkull,
-    color: "#ef4444",
-    description: "Memory corruption, buffer overflows, ROP chain construction, and shellcoding",
-    topics: ["BoF", "ROP Chains", "Format Strings", "Heap"]
-  },
-  {
-    category: "OSINT",
-    label: "Open Source Intel",
-    shortCode: "OSINT // 06",
-    icon: FaUserSecret,
-    color: "#06b6d4",
-    description: "Public intelligence gathering, geolocation, digital footprints, and recon",
-    topics: ["Geolocation", "Social Recon", "Metadata", "Threat Intel"]
-  },
-  {
-    category: "Steganography",
-    label: "Steganography",
-    shortCode: "STEGO // 07",
-    icon: FaFileImage,
-    color: "#ec4899",
-    description: "Data concealed in carrier media, audio spectrograms, and polyglot files",
-    topics: ["LSB Extraction", "Spectrograms", "Polyglots", "Exif"]
-  },
-  {
-    category: "Misc",
-    label: "Miscellaneous",
-    shortCode: "MISC // 08",
-    icon: FaCube,
-    color: "#8b5cf6",
-    description: "Esoteric languages, logic challenges, hardware, and emerging cybersecurity vectors",
-    topics: ["Scripting", "Logic Puzzles", "AI Jailbreak", "Hardware"]
-  }
-];
-
-const DIFFICULTIES = ["All", "Easy", "Medium", "Hard", "Insane"];
-
 export const CATEGORIES = [
   "All",
   "Web Exploitation",
@@ -144,23 +47,29 @@ export const CATEGORIES = [
   "Misc"
 ];
 
+const DIFFICULTIES = ["All", "Easy", "Medium", "Hard", "Insane"];
+
 export default function Challenges({ currentUser, onUserUpdated }) {
   const [challenges, setChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activityFeed, setActivityFeed] = useState([]);
 
-  // Filtering states
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  // Filters
+  const [selectedCategory, setSelectedCategory] = useState(() => {
+    const saved = localStorage.getItem("ctf_filter_category");
+    if (saved && CATEGORIES.includes(saved)) {
+      localStorage.removeItem("ctf_filter_category");
+      return saved;
+    }
+    return "All";
+  });
   const [selectedDifficulty, setSelectedDifficulty] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All"); // All, Solved, Unsolved
-  const [selectedAcceptance, setSelectedAcceptance] = useState("All"); // All, high, medium, low
-  const [selectedBlood, setSelectedBlood] = useState("All"); // All, unclaimed, claimed
-  const [sortBy, setSortBy] = useState("default");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("default");
 
-  // Modal state
+  // Modal / Detail state
   const [activeModalChall, setActiveModalChall] = useState(null);
-  const [modalTab, setModalTab] = useState("details"); // 'details', 'hint', 'writeup', 'comments'
+  const [modalTab, setModalTab] = useState("description"); // description, hints, writeup, discussion
   const [flagInput, setFlagInput] = useState("");
   const [submitResult, setSubmitResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -176,7 +85,7 @@ export default function Challenges({ currentUser, onUserUpdated }) {
   const [instance, setInstance] = useState(null);
   const [instanceBusy, setInstanceBusy] = useState(false);
 
-  // Load all challenges for the arena
+  // Load all challenges
   const fetchChallenges = async () => {
     setLoading(true);
     try {
@@ -189,24 +98,12 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     }
   };
 
-  const fetchActivityFeed = async () => {
-    try {
-      const res = await api.get("/activity/feed?limit=15");
-      setActivityFeed(res.data.feed || []);
-    } catch (err) {
-      // quiet fail
-    }
-  };
-
   useEffect(() => {
     fetchChallenges();
-    fetchActivityFeed();
-    const interval = setInterval(fetchActivityFeed, 15000);
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (!activeModalChall || modalTab !== "hint") return;
+    if (!activeModalChall || modalTab !== "hints") return;
     api.get(`/challenges/${activeModalChall.id}/hints`)
       .then(res => setAdvancedHints(res.data.hints || []))
       .catch(() => setAdvancedHints([]));
@@ -228,7 +125,7 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     try {
       const res = await api.post(`/challenges/${activeModalChall.id}/instance/start`);
       setInstance(res.data.instance);
-      setSubmitResult({ type: "info", text: "Live challenge sandbox instance started." });
+      setSubmitResult({ type: "info", text: "Live sandbox instance started." });
     } catch (err) {
       setSubmitResult({ type: "error", text: err.response?.data?.detail || "Could not start live instance" });
     } finally {
@@ -242,7 +139,7 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     try {
       await api.post(`/challenges/${activeModalChall.id}/instance/stop`);
       setInstance(null);
-      setSubmitResult({ type: "info", text: "Live challenge sandbox instance stopped." });
+      setSubmitResult({ type: "info", text: "Live sandbox instance stopped." });
     } catch (err) {
       setSubmitResult({ type: "error", text: err.response?.data?.detail || "Could not stop instance" });
     } finally {
@@ -250,17 +147,18 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     }
   };
 
-  const getFileDownloadUrl = (rawUrl) => {
-    if (!rawUrl) return "#";
+  // Always route file downloads through our own backend endpoint
+  // so auth (token) works and we aren't relying on external URLs
+  const getFileDownloadUrl = (challId) => {
     const token = getToken();
-    if (!token) return rawUrl;
-    return rawUrl.includes("?") ? `${rawUrl}&token=${encodeURIComponent(token)}` : `${rawUrl}?token=${encodeURIComponent(token)}`;
+    const base = `${API_URL}/challenges/${challId}/file`;
+    return token ? `${base}?token=${encodeURIComponent(token)}` : base;
   };
 
   // Open Challenge Modal
   const openModal = async (chall) => {
     setActiveModalChall(chall);
-    setModalTab("details");
+    setModalTab("description");
     setFlagInput("");
     setSubmitResult(null);
     setWriteupText("");
@@ -283,11 +181,11 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     }
   };
 
-  // Unlock Hint
+  // Unlock Standard Hint
   const handleUnlockHint = async () => {
     if (!activeModalChall) return;
     const confirmUnlock = window.confirm(
-      `Unlocking this hint will deduct ${activeModalChall.hint_cost || 15} points from your score. Do you want to proceed?`
+      `Unlocking this hint will deduct ${activeModalChall.hint_cost || 15} points. Do you want to proceed?`
     );
     if (!confirmUnlock) return;
 
@@ -323,7 +221,7 @@ export default function Challenges({ currentUser, onUserUpdated }) {
       if (res.data.correct) {
         setSubmitResult({
           type: "success",
-          text: res.data.message,
+          text: `✓ Correct flag! +${activeModalChall.points} points awarded`,
           is_first_blood: res.data.is_first_blood
         });
         setActiveModalChall(prev => ({
@@ -332,8 +230,7 @@ export default function Challenges({ currentUser, onUserUpdated }) {
           solves_count: (prev?.solves_count || 0) + 1,
           first_blood: prev?.first_blood || (res.data.is_first_blood ? {
             user_name: currentUser?.name || "You",
-            college: currentUser?.college || "Operator",
-            team_name: currentUser?.team_name || null,
+            college: currentUser?.college || "PCCOE",
             time: new Date().toISOString()
           } : null)
         }));
@@ -341,28 +238,21 @@ export default function Challenges({ currentUser, onUserUpdated }) {
           prev.map(c => c.id === activeModalChall.id ? {
             ...c,
             is_solved: true,
-            solves_count: (c.solves_count || 0) + 1,
-            first_blood: c.first_blood || (res.data.is_first_blood ? {
-              user_name: currentUser?.name || "You",
-              college: currentUser?.college || "Operator",
-              team_name: currentUser?.team_name || null,
-              time: new Date().toISOString()
-            } : null)
+            solves_count: (c.solves_count || 0) + 1
           } : c)
         );
-        fetchActivityFeed();
         if (onUserUpdated) onUserUpdated();
       } else {
         setSubmitResult({
           type: "error",
-          text: res.data.message,
+          text: "✕ Incorrect flag. Please inspect your solution and try again.",
           is_first_blood: false
         });
       }
     } catch (err) {
       setSubmitResult({
         type: "error",
-        text: err.response?.data?.detail || "Submission failed"
+        text: err.response?.data?.detail || "Submission failed. Please wait before retrying."
       });
     } finally {
       setSubmitting(false);
@@ -375,12 +265,12 @@ export default function Challenges({ currentUser, onUserUpdated }) {
       const res = await api.get(`/challenges/${activeModalChall.id}/writeup`);
       setWriteupText(res.data.writeup);
     } catch (err) {
-      setWriteupText(err.response?.data?.detail || "Writeup locked.");
+      setWriteupText(err.response?.data?.detail || "Writeup locked until challenge is solved.");
     }
   };
 
   const loadComments = async () => {
-    setModalTab("comments");
+    setModalTab("discussion");
     try {
       const res = await api.get(`/challenges/${activeModalChall.id}/comments`);
       setComments(res.data.comments || []);
@@ -412,524 +302,367 @@ export default function Challenges({ currentUser, onUserUpdated }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Compute stats per track dynamically for the Category Boxes
-  const trackStats = useMemo(() => {
-    const stats = {};
-    TRACKS_METADATA.forEach(tr => {
-      const list = tr.category === "All" ? challenges : challenges.filter(c => c.category === tr.category);
-      const total = list.length;
-      const solved = list.filter(c => c.is_solved).length;
-      const points = list.reduce((sum, c) => sum + (c.points || 0), 0);
-      const solvesSum = list.reduce((sum, c) => sum + (c.solves_count || 0), 0);
-      const attemptsSum = list.reduce((sum, c) => sum + (c.total_attempts || c.solves_count || 0), 0);
-      const avgAcceptance = attemptsSum > 0 ? Math.round((solvesSum / attemptsSum) * 100) : (total > 0 ? 100 : 0);
-      stats[tr.category] = {
-        total,
-        solved,
-        points,
-        pct: total > 0 ? Math.round((solved / total) * 100) : 0,
-        avgAcceptance
-      };
-    });
-    return stats;
-  }, [challenges]);
-
-  // Multi-option filtering logic
+  // Filter challenges
   const filteredChallenges = useMemo(() => {
     return challenges.filter(c => {
-      // 1. Category Filter
       if (selectedCategory !== "All" && c.category !== selectedCategory) return false;
-
-      // 2. Difficulty Filter
       if (selectedDifficulty !== "All" && (c.difficulty || "").toLowerCase() !== selectedDifficulty.toLowerCase()) return false;
-
-      // 3. Status Filter (Solved / Unsolved)
       if (selectedStatus === "Solved" && !c.is_solved) return false;
       if (selectedStatus === "Unsolved" && c.is_solved) return false;
-
-      // 4. Acceptance Rate Filter
-      const acc = c.acceptance_rate ?? (c.total_attempts ? Math.round((c.solves_count / c.total_attempts) * 100) : (c.solves_count > 0 ? 100 : 0));
-      if (selectedAcceptance === "high" && acc < 60) return false;
-      if (selectedAcceptance === "medium" && (acc < 30 || acc >= 60)) return false;
-      if (selectedAcceptance === "low" && acc >= 30) return false;
-
-      // 5. First Blood Filter
-      if (selectedBlood === "unclaimed" && c.first_blood) return false;
-      if (selectedBlood === "claimed" && !c.first_blood) return false;
-
-      // 6. Search Query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchTitle = c.title?.toLowerCase().includes(q);
-        const matchCategory = c.category?.toLowerCase().includes(q);
-        const matchDesc = c.description?.toLowerCase().includes(q);
-        if (!matchTitle && !matchCategory && !matchDesc) return false;
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchTitle = (c.title || "").toLowerCase().includes(query);
+        const matchCat = (c.category || "").toLowerCase().includes(query);
+        const matchDesc = (c.description || "").toLowerCase().includes(query);
+        if (!matchTitle && !matchCat && !matchDesc) return false;
       }
-
       return true;
     });
-  }, [challenges, selectedCategory, selectedDifficulty, selectedStatus, selectedAcceptance, selectedBlood, searchQuery]);
+  }, [challenges, selectedCategory, selectedDifficulty, selectedStatus, searchQuery]);
 
-  // Multi-option sorting logic
+  // Sort challenges
   const sortedChallenges = useMemo(() => {
-    const diffOrder = { "easy": 1, "medium": 2, "hard": 3, "insane": 4 };
-
-    return [...filteredChallenges].sort((a, b) => {
-      const accA = a.acceptance_rate ?? (a.total_attempts ? (a.solves_count / a.total_attempts) * 100 : (a.solves_count > 0 ? 100 : 0));
-      const accB = b.acceptance_rate ?? (b.total_attempts ? (b.solves_count / b.total_attempts) * 100 : (b.solves_count > 0 ? 100 : 0));
-
-      if (sortBy === "acceptance-desc") return accB - accA;
-      if (sortBy === "acceptance-asc") return accA - accB;
-      if (sortBy === "points-desc") return (b.points || 0) - (a.points || 0);
-      if (sortBy === "points-asc") return (a.points || 0) - (b.points || 0);
-      if (sortBy === "diff-asc") return (diffOrder[a.difficulty?.toLowerCase()] || 0) - (diffOrder[b.difficulty?.toLowerCase()] || 0);
-      if (sortBy === "diff-desc") return (diffOrder[b.difficulty?.toLowerCase()] || 0) - (diffOrder[a.difficulty?.toLowerCase()] || 0);
-      if (sortBy === "solves-desc") return (b.solves_count || 0) - (a.solves_count || 0);
-      if (sortBy === "solves-asc") return (a.solves_count || 0) - (b.solves_count || 0);
-      if (sortBy === "title-asc") return a.title.localeCompare(b.title);
-      return 0; // default
-    });
+    const list = [...filteredChallenges];
+    if (sortBy === "points-asc") {
+      return list.sort((a, b) => (a.points || 0) - (b.points || 0));
+    }
+    if (sortBy === "points-desc") {
+      return list.sort((a, b) => (b.points || 0) - (a.points || 0));
+    }
+    if (sortBy === "solves-desc") {
+      return list.sort((a, b) => (b.solves_count || 0) - (a.solves_count || 0));
+    }
+    if (sortBy === "title-asc") {
+      return list.sort((a, b) => a.title.localeCompare(b.title));
+    }
+    return list; // default
   }, [filteredChallenges, sortBy]);
 
-  const activeCategoryMeta = TRACKS_METADATA.find(t => t.category === selectedCategory);
-
-  const totalPoints = useMemo(() => challenges.reduce((s, c) => s + (c.points || 0), 0), [challenges]);
-  const solvedCount = useMemo(() => challenges.filter(c => c.is_solved).length, [challenges]);
-  const progressPct = challenges.length ? Math.round((solvedCount / challenges.length) * 100) : 0;
-  const unclaimedBlood = useMemo(() => challenges.filter(c => !c.first_blood).length, [challenges]);
-  const avgPlatformAcceptance = useMemo(() => {
-    if (!challenges.length) return 0;
-    const totalSolves = challenges.reduce((s, c) => s + (c.solves_count || 0), 0);
-    const totalAttempts = challenges.reduce((s, c) => s + (c.total_attempts || c.solves_count || 0), 0);
-    return totalAttempts > 0 ? Math.round((totalSolves / totalAttempts) * 100) : 100;
-  }, [challenges]);
+  const solvedCount = challenges.filter(c => c.is_solved).length;
 
   const resetAllFilters = () => {
     setSelectedCategory("All");
     setSelectedDifficulty("All");
     setSelectedStatus("All");
-    setSelectedAcceptance("All");
-    setSelectedBlood("All");
     setSortBy("default");
     setSearchQuery("");
   };
 
   return (
     <div className="challenges-page">
-      {/* Header Banner */}
-      <div className="section-header">
+      {/* Page Header */}
+      <div className="page-header">
         <div>
           <div className="platform-breadcrumb">
-            <span>OWASP PCCOE CTF Academy</span>
+            <span className="breadcrumb-link" onClick={() => setSelectedCategory("All")}>
+              OWASP PCCOE CTF Academy
+            </span>
             <span className="breadcrumb-sep">/</span>
-            <span>Challenges</span>
+            <span className="breadcrumb-active">Challenges</span>
             {selectedCategory !== "All" && (
               <>
                 <span className="breadcrumb-sep">/</span>
-                <span>{selectedCategory}</span>
+                <span className="breadcrumb-active">{selectedCategory}</span>
               </>
             )}
           </div>
-          <h2>OWASP PCCOE Challenges</h2>
-          <p className="subtitle">
-            Practice real-world cybersecurity problems curated for the OWASP PCCOE community.
+          <h1 className="page-title">Challenges</h1>
+          <p className="page-subtitle">
+            Solve cybersecurity challenges, practice offensive & defensive skills, and capture flags.
           </p>
         </div>
 
-        {/* Search */}
-        <div className="search-bar">
-          <FaSearch className="search-icon" />
+        <div className="page-stats-summary">
+          <span className="stat-pill-item">
+            Solved: <b>{solvedCount}</b> / {challenges.length}
+          </span>
+        </div>
+      </div>
+
+      {/* LeetCode-style Horizontal Filter Bar */}
+      <div className="filter-toolbar">
+        <div className="filter-search-box">
+          <FaSearch className="filter-search-icon" />
           <input
             type="text"
-            placeholder="Search challenges by title or keyword..."
+            className="filter-search-input"
+            placeholder="Search challenges by title, category, or keyword..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
-        </div>
-      </div>
-
-      {/* Live Activity Stream Ticker */}
-      <div className="live-ticker-panel">
-        <div className="live-ticker-label">
-          <span className="live-beacon-dot" />
-          <FaFire className="live-flame-icon" />
-          <span>LIVE SOLVES</span>
-        </div>
-        <div className="live-ticker-viewport">
-          {activityFeed.length === 0 ? (
-            <div className="live-ticker-empty">
-              <span>Ready for first bloods. Capture flags to broadcast your handle platform-wide!</span>
-            </div>
-          ) : (
-            <div className="live-ticker-stream">
-              {activityFeed.map((item) => (
-                <div key={item.id} className={`ticker-pill ${item.is_first_blood ? "first-blood" : ""}`}>
-                  {item.is_first_blood && (
-                    <span className="ticker-fb-tag">
-                      <FaTint /> FIRST BLOOD
-                    </span>
-                  )}
-                  <span className="ticker-user">
-                    <b>{item.user_name}</b>
-                    {item.team_name ? (
-                      <small className="ticker-tag-team">[{item.team_name}]</small>
-                    ) : item.college ? (
-                      <small className="ticker-tag-college">({item.college})</small>
-                    ) : null}
-                  </span>
-                  <span className="ticker-action">captured</span>
-                  <span className="ticker-chall-name">{item.challenge_title}</span>
-                  <span className="ticker-pts">+{item.points} pts</span>
-                  <span className="ticker-timestamp">{timeAgo(item.submitted_at)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Compact Single-Line Category Boxes */}
-      <div className="compact-tracks-strip">
-        <div className="compact-tracks-header">
-          <div className="compact-tracks-title-group">
-            <span className="compact-tracks-kicker">// OFFENSIVE DOMAIN TRACKS</span>
-            <span className="compact-tracks-subtitle">Select a category to isolate challenges:</span>
-          </div>
-          {selectedCategory !== "All" && (
-            <button className="compact-tracks-clear-btn" onClick={() => setSelectedCategory("All")}>
-              Reset to All ({challenges.length})
+          {searchQuery && (
+            <button className="clear-search-btn" onClick={() => setSearchQuery("")}>
+              <FaTimes />
             </button>
           )}
         </div>
-        <div className="compact-tracks-row">
-          {TRACKS_METADATA.map((track) => {
-            const Icon = track.icon;
-            const st = trackStats[track.category] || { total: 0, solved: 0, points: 0, pct: 0, avgAcceptance: 0 };
-            const isActive = selectedCategory === track.category;
-            return (
-              <div
-                key={track.category}
-                className={`compact-track-card ${isActive ? "active" : ""}`}
-                style={{ "--track-color": track.color }}
-                onClick={() => setSelectedCategory(track.category)}
-                role="button"
-                tabIndex={0}
-                title={`${track.label}: ${st.solved}/${st.total} solved (${st.pct}%)`}
-              >
-                <div className="compact-track-top">
-                  <div className="compact-track-icon">
-                    <Icon />
-                  </div>
-                  <div className="compact-track-badges">
-                    <span className="compact-track-count">{st.total} Qs</span>
-                    {isActive && <span className="compact-track-dot" />}
-                  </div>
-                </div>
-                <div className="compact-track-name">{track.label}</div>
-                <div className="compact-track-footer">
-                  <span className="compact-track-stat">{st.solved}/{st.total} Solved</span>
-                  <span className="compact-track-acc">{st.avgAcceptance}% acc</span>
-                </div>
-                <div className="compact-track-prog-bar">
-                  <div
-                    className="compact-track-prog-fill"
-                    style={{
-                      width: `${st.pct}%`,
-                      backgroundColor: track.color
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+
+        <div className="filter-controls-row">
+          <div className="filter-select-group">
+            <label>Category:</label>
+            <select
+              value={selectedCategory}
+              onChange={e => setSelectedCategory(e.target.value)}
+              className="clean-select"
+            >
+              {CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-select-group">
+            <label>Difficulty:</label>
+            <select
+              value={selectedDifficulty}
+              onChange={e => setSelectedDifficulty(e.target.value)}
+              className="clean-select"
+            >
+              {DIFFICULTIES.map(diff => (
+                <option key={diff} value={diff}>{diff}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-select-group">
+            <label>Status:</label>
+            <select
+              value={selectedStatus}
+              onChange={e => setSelectedStatus(e.target.value)}
+              className="clean-select"
+            >
+              <option value="All">All</option>
+              <option value="Solved">Solved</option>
+              <option value="Unsolved">Unsolved</option>
+            </select>
+          </div>
+
+          <div className="filter-select-group">
+            <label>Sort:</label>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              className="clean-select"
+            >
+              <option value="default">Default</option>
+              <option value="points-asc">Points: Low to High</option>
+              <option value="points-desc">Points: High to Low</option>
+              <option value="solves-desc">Most Solved</option>
+              <option value="title-asc">Title: A-Z</option>
+            </select>
+          </div>
+
+          {(selectedCategory !== "All" || selectedDifficulty !== "All" || selectedStatus !== "All" || searchQuery || sortBy !== "default") && (
+            <button className="btn-secondary btn-sm" onClick={resetAllFilters}>
+              <FaTimes /> Reset
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Filters Bar: Difficulty & Status & Sorting */}
-      <div className="filters-bar">
-        <div className="filter-group">
-          <label>Difficulty:</label>
-          <div className="filter-buttons">
-            {DIFFICULTIES.map(diff => (
-              <button
-                key={diff}
-                className={`filter-btn ${selectedDifficulty === diff ? "active" : ""}`}
-                onClick={() => setSelectedDifficulty(diff)}
-              >
-                {diff}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="filter-group">
-          <label>Status:</label>
-          <div className="filter-buttons">
-            {["All", "Solved", "Unsolved"].map(status => (
-              <button
-                key={status}
-                className={`filter-btn ${selectedStatus === status ? "active" : ""}`}
-                onClick={() => setSelectedStatus(status)}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="filter-group">
-          <label>Acceptance:</label>
-          <select
-            value={selectedAcceptance}
-            onChange={e => setSelectedAcceptance(e.target.value)}
-            className="filter-select"
-          >
-            <option value="All">All</option>
-            <option value="high">High (≥60%)</option>
-            <option value="medium">Medium (30-59%)</option>
-            <option value="low">Low (&lt;30%)</option>
-          </select>
-        </div>
-
-        <div className="filter-group">
-          <label>First Blood:</label>
-          <select
-            value={selectedBlood}
-            onChange={e => setSelectedBlood(e.target.value)}
-            className="filter-select"
-          >
-            <option value="All">All</option>
-            <option value="unclaimed">🩸 Unclaimed</option>
-            <option value="claimed">Claimed</option>
-          </select>
-        </div>
-
-        <div className="filter-group sort-group">
-          <label><FaSortAmountDown /> Sort:</label>
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value)}
-            className="filter-select sort-select"
-          >
-            <option value="default">Default</option>
-            <option value="acceptance-desc">Acceptance: High → Low</option>
-            <option value="acceptance-asc">Acceptance: Low → High</option>
-            <option value="diff-asc">Difficulty: Easy → Hard</option>
-            <option value="diff-desc">Difficulty: Hard → Easy</option>
-            <option value="points-desc">Points: High → Low</option>
-            <option value="points-asc">Points: Low → High</option>
-            <option value="solves-desc">Most Solved</option>
-            <option value="solves-asc">Least Solved</option>
-            <option value="title-asc">Title: A → Z</option>
-          </select>
-        </div>
-
-        {(selectedCategory !== "All" || selectedDifficulty !== "All" || selectedStatus !== "All" || selectedAcceptance !== "All" || selectedBlood !== "All" || searchQuery) && (
-          <button className="reset-filters-link" onClick={resetAllFilters}>
-            <FaTimes /> Reset Filters
-          </button>
-        )}
-      </div>
-
-      {/* Challenge Grid */}
+      {/* LeetCode-style Problem Table */}
       {loading ? (
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Loading challenges...</p>
+        <div className="table-skeleton-wrap">
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
         </div>
       ) : sortedChallenges.length === 0 ? (
-        <div className="empty-state">
+        <div className="card empty-card">
           <FaFlag className="empty-icon" />
-          <h3>No challenges match your criteria</h3>
-          <p>Try clearing filters or search terms.</p>
-          <button className="primary-btn" onClick={resetAllFilters}>
-            Reset Filters
+          <h3>No challenges found</h3>
+          <p>Try modifying your search or clearing your active filters.</p>
+          <button className="btn-primary btn-sm" onClick={resetAllFilters}>
+            Clear Filters
           </button>
         </div>
       ) : (
-        <div className="challenge-grid">
-          {sortedChallenges.map(chall => {
-            const diffClass = (chall.difficulty || "easy").toLowerCase();
-            const accRate = chall.acceptance_rate ?? (chall.total_attempts ? Math.round((chall.solves_count / chall.total_attempts) * 100) : (chall.solves_count > 0 ? 100 : 0));
+        <div className="card table-card">
+          <div className="table-responsive">
+            <table className="clean-table challenge-table">
+              <thead>
+                <tr>
+                  <th style={{ width: "48px", textAlign: "center" }}>Status</th>
+                  <th>Title</th>
+                  <th style={{ width: "180px" }}>Category</th>
+                  <th style={{ width: "120px" }}>Difficulty</th>
+                  <th style={{ width: "100px", textAlign: "right" }}>Points</th>
+                  <th style={{ width: "130px", textAlign: "right" }}>Solves</th>
+                  <th style={{ width: "90px", textAlign: "center" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedChallenges.map(chall => {
+                  const diffClass = (chall.difficulty || "easy").toLowerCase();
+                  const accRate = chall.acceptance_rate ?? (chall.total_attempts ? Math.round((chall.solves_count / chall.total_attempts) * 100) : (chall.solves_count > 0 ? 100 : 0));
 
-            return (
-              <div
-                key={chall.id}
-                className={`challenge-card ${chall.is_solved ? "solved" : ""}`}
-                onClick={() => openModal(chall)}
-              >
-                <div className="card-top">
-                  <span className="category-tag">{chall.category}</span>
-                  <span className={`difficulty-tag ${diffClass}`}>
-                    {chall.difficulty}
-                  </span>
-                </div>
+                  return (
+                    <tr
+                      key={chall.id}
+                      className={`chall-row ${chall.is_solved ? "row-solved" : ""}`}
+                      onClick={() => openModal(chall)}
+                    >
+                      <td style={{ textAlign: "center" }}>
+                        {chall.is_solved ? (
+                          <span className="status-solved" title="Solved">✓</span>
+                        ) : (
+                          <span className="status-unsolved" title="Unsolved">○</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="chall-title-cell">
+                          <span className="chall-title-text">{chall.title}</span>
+                          {chall.first_blood && (
+                            <span className="fb-tag-mini" title={`First blood captured by ${chall.first_blood.user_name}`}>
+                              🩸 FB
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="category-cell-pill">{chall.category}</span>
+                      </td>
+                      <td>
+                        <span className={`diff-pill ${diffClass}`}>
+                          {chall.difficulty}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "right" }} className="mono-points">
+                        {chall.points}
+                      </td>
+                      <td style={{ textAlign: "right" }} className="solves-cell">
+                        <span>{chall.solves_count || 0}</span>
+                        <small className="acc-rate">({accRate}%)</small>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <button
+                          className={`btn-row-action ${chall.is_solved ? "btn-review" : "btn-solve"}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openModal(chall);
+                          }}
+                        >
+                          {chall.is_solved ? "Review" : "Solve"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-                <h3 className="chall-title">{chall.title}</h3>
-                <p className="chall-desc">{chall.description}</p>
-
-                {chall.first_blood ? (
-                  <div className="chall-fb-badge" title={`First blood captured by ${chall.first_blood.user_name}`}>
-                    <FaTint className="fb-drop-icon pulse" />
-                    <span>First Blood: <b>{chall.first_blood.user_name}</b></span>
-                  </div>
-                ) : (
-                  <div className="chall-fb-badge unclaimed" title="First blood is still up for grabs!">
-                    <FaTint className="fb-drop-icon" />
-                    <span>🩸 Unclaimed Blood</span>
-                  </div>
-                )}
-
-                <div className="card-footer">
-                  <div className="points-badge">
-                    <b>{chall.points}</b> <small>PTS</small>
-                  </div>
-
-                  <div className="solves-info">
-                    👥 {chall.solves_count || 0} solves · 🎯 {accRate}%
-                  </div>
-
-                  {chall.is_solved ? (
-                    <span className="solved-indicator">
-                      <FaCheckCircle /> Solved
-                    </span>
-                  ) : (
-                    <button className="solve-btn">
-                      Solve <FaFlag />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          <div className="table-footer-info">
+            <span>Showing {sortedChallenges.length} of {challenges.length} challenges</span>
+          </div>
         </div>
       )}
 
-      {/* Modal */}
+      {/* LeetCode + Hack The Box Challenge Detail Modal */}
       {activeModalChall && (
         <div className="modal-backdrop" onClick={() => setActiveModalChall(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <button className="close-btn" onClick={() => setActiveModalChall(null)}>
-              <FaTimes />
-            </button>
-
-            {/* Modal Header */}
-            <div className="modal-header">
-              <div className="challenge-breadcrumb">
-                <span>OWASP PCCOE CTF Academy</span>
-                <span className="breadcrumb-sep">/</span>
-                <span>Challenges</span>
-                <span className="breadcrumb-sep">/</span>
-                <span>{activeModalChall.category}</span>
-                <span className="breadcrumb-sep">/</span>
-                <span className="breadcrumb-active">{activeModalChall.title}</span>
-              </div>
-              <div className="modal-tags">
-                <span className="category-tag">{activeModalChall.category}</span>
-                <span className={`difficulty-tag ${(activeModalChall.difficulty || "easy").toLowerCase()}`}>
-                  {activeModalChall.difficulty}
+          <div className="problem-modal-content" onClick={e => e.stopPropagation()}>
+            {/* Modal Topbar */}
+            <div className="problem-modal-topbar">
+              <div className="modal-top-left">
+                <span className="problem-crumb">
+                  OWASP PCCOE / Challenges / {activeModalChall.category}
                 </span>
-                <span className="points-badge">
-                  <b>{activeModalChall.points}</b> PTS
-                </span>
-                <span className="acceptance-pill">
-                  🎯 {activeModalChall.acceptance_rate ?? (activeModalChall.total_attempts ? Math.round((activeModalChall.solves_count / activeModalChall.total_attempts) * 100) : 100)}% Acceptance
-                </span>
-                {activeModalChall.is_solved && (
-                  <span className="solved-badge-pill">
-                    <FaCheckCircle /> SOLVED
+                <h2 className="problem-title">{activeModalChall.title}</h2>
+                <div className="problem-meta-strip">
+                  <span className="category-cell-pill">{activeModalChall.category}</span>
+                  <span className={`diff-pill ${(activeModalChall.difficulty || "easy").toLowerCase()}`}>
+                    {activeModalChall.difficulty}
                   </span>
-                )}
+                  <span className="meta-points">{activeModalChall.points} pts</span>
+                  {activeModalChall.scoring_mode === "decaying" && (
+                    <span className="subtle-badge" title="Dynamic points decay as more competitors solve">Decaying</span>
+                  )}
+                  <span className="meta-solves">· {activeModalChall.solves_count || 0} solves</span>
+                  {activeModalChall.is_solved && (
+                    <span className="solved-status-badge">
+                      <FaCheckCircle /> Solved
+                    </span>
+                  )}
+                </div>
               </div>
-              <h2>{activeModalChall.title}</h2>
+
+              <button
+                className="modal-close-icon-btn"
+                onClick={() => setActiveModalChall(null)}
+                aria-label="Close"
+              >
+                <FaTimes />
+              </button>
             </div>
 
-            {/* Modal Navigation Tabs */}
-            <div className="modal-tabs">
+            {/* Developer Tabs */}
+            <div className="problem-tabs-header">
               <button
-                className={`modal-tab ${modalTab === "details" ? "active" : ""}`}
-                onClick={() => setModalTab("details")}
+                className={`problem-tab-btn ${modalTab === "description" ? "active" : ""}`}
+                onClick={() => setModalTab("description")}
               >
-                <FaFlag /> Challenge
+                <FaFlag /> Description
               </button>
-
               <button
-                className={`modal-tab ${modalTab === "hint" ? "active" : ""}`}
-                onClick={() => setModalTab("hint")}
+                className={`problem-tab-btn ${modalTab === "hints" ? "active" : ""}`}
+                onClick={() => setModalTab("hints")}
               >
-                <FaLightbulb /> Hint
-                {activeModalChall.hint_unlocked ? " (Unlocked)" : ` (-${activeModalChall.hint_cost || 15} pts)`}
+                <FaLightbulb /> Hints
+                {activeModalChall.hint_unlocked && <span className="tab-pill-unlocked">Unlocked</span>}
               </button>
-
               <button
-                className={`modal-tab ${modalTab === "writeup" ? "active" : ""}`}
+                className={`problem-tab-btn ${modalTab === "writeup" ? "active" : ""}`}
                 onClick={loadWriteup}
               >
-                <FaBookOpen /> Writeup {!activeModalChall.is_solved && <FaLock className="lock-icon" />}
+                <FaBookOpen /> Writeup {!activeModalChall.is_solved && !activeModalChall.event_ended && currentUser?.role !== "admin" && <FaLock className="tab-lock-icon" />}
               </button>
-
               <button
-                className={`modal-tab ${modalTab === "comments" ? "active" : ""}`}
+                className={`problem-tab-btn ${modalTab === "discussion" ? "active" : ""}`}
                 onClick={loadComments}
               >
-                <FaComments /> Discussion {!activeModalChall.is_solved && <FaLock className="lock-icon" />}
+                <FaComments /> Discussion {!activeModalChall.is_solved && currentUser?.role !== "admin" && <FaLock className="tab-lock-icon" />}
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="modal-body">
-              {/* TAB 1: DETAILS */}
-              {modalTab === "details" && (
-                <div className="tab-pane">
-                  {/* First Blood Showcase */}
-                  {activeModalChall.first_blood ? (
-                    <div className="modal-first-blood-showcase">
-                      <div className="modal-fb-header">
-                        <FaTint className="fb-drop-icon pulse" />
-                        <span className="modal-fb-title">FIRST BLOOD CAPTOR</span>
-                      </div>
-                      <div className="modal-fb-content">
-                        <span className="modal-fb-solver">
-                          <b>{activeModalChall.first_blood.user_name}</b>
-                          {activeModalChall.first_blood.college && (
-                            <small className="modal-fb-college"> · {activeModalChall.first_blood.college}</small>
-                          )}
-                          {activeModalChall.first_blood.team_name && (
-                            <span className="modal-fb-squad">🛡️ Squad {activeModalChall.first_blood.team_name}</span>
-                          )}
-                        </span>
-                        {activeModalChall.first_blood.time && (
-                          <span className="modal-fb-date">
-                            Captured on {new Date(activeModalChall.first_blood.time).toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="modal-first-blood-unclaimed">
+            {/* Modal Scrollable Body */}
+            <div className="problem-modal-body">
+              {/* TAB 1: DESCRIPTION */}
+              {modalTab === "description" && (
+                <div className="problem-pane">
+                  {/* First Blood notice if present */}
+                  {activeModalChall.first_blood && (
+                    <div className="fb-compact-callout">
                       <FaTint className="fb-drop-icon" />
-                      <div>
-                        <b>🩸 First Blood Unclaimed!</b>
-                        <p>No operator has solved this challenge yet. Solve it first to claim legendary first blood!</p>
-                      </div>
+                      <span>
+                        First blood captured by <b>{activeModalChall.first_blood.user_name}</b>
+                        {activeModalChall.first_blood.college && ` (${activeModalChall.first_blood.college})`}
+                      </span>
                     </div>
                   )}
 
-                  <div className="description-box">
-                    <p>{activeModalChall.description}</p>
+                  {/* Problem Description */}
+                  <div className="problem-statement">
+                    <h4>Challenge Description</h4>
+                    <p className="statement-text">{activeModalChall.description}</p>
                   </div>
 
-                  {/* Connection command, files, or live instance */}
+                  {/* Connection or Files */}
                   {(activeModalChall.connection_info || activeModalChall.file_url || activeModalChall.runtime_enabled) && (
-                    <div className="resources-box">
+                    <div className="challenge-resources-section">
+                      <h4>Resources & Targets</h4>
+
                       {activeModalChall.connection_info && (
-                        <div className="connection-info">
-                          <span className="res-label"><FaTerminal /> Connection Target:</span>
-                          <div className="code-snippet">
+                        <div className="resource-item">
+                          <span className="res-title"><FaTerminal /> Connection Target:</span>
+                          <div className="code-box">
                             <code>{activeModalChall.connection_info}</code>
                             <button
-                              className="copy-btn"
+                              className="btn-copy-code"
                               onClick={() => copyToClipboard(activeModalChall.connection_info)}
+                              title="Copy command"
                             >
                               {copied ? <FaCheck /> : <FaCopy />}
                             </button>
@@ -938,42 +671,53 @@ export default function Challenges({ currentUser, onUserUpdated }) {
                       )}
 
                       {activeModalChall.file_url && (
-                        <div className="file-attachment">
-                          <span className="res-label"><FaDownload /> Challenge File:</span>
+                        <div className="resource-item">
+                          <span className="res-title"><FaDownload /> Challenge Files:</span>
                           <a
-                            href={getFileDownloadUrl(activeModalChall.file_url)}
+                            href={getFileDownloadUrl(activeModalChall.id)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="download-link"
+                            className="btn-secondary btn-sm"
                           >
-                            Download Challenge File <FaExternalLinkAlt />
+                            📦 Download Challenge Files <FaExternalLinkAlt />
                           </a>
                         </div>
                       )}
 
                       {activeModalChall.runtime_enabled && (
-                        <div className="live-instance-panel">
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                            <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
-                              <FaServer style={{ color: "#55d6be" }} /> Live Sandbox Instance
+                        <div className="resource-item docker-instance-box">
+                          <div className="docker-info-head">
+                            <span className="docker-title">
+                              <FaServer /> Live Sandbox Environment
                             </span>
-                            <small style={{ opacity: 0.75 }}>Isolated Docker environment</small>
+                            <small>Isolated temporary instance</small>
                           </div>
                           {instance?.status === "running" ? (
-                            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                              <code style={{ background: "#0b1220", padding: "4px 8px", borderRadius: 4, color: "#55d6be" }}>
-                                {instance.connection_url}
-                              </code>
-                              <a href={instance.connection_url} target="_blank" rel="noreferrer" className="primary-btn sm" style={{ textDecoration: "none" }}>
-                                Open Instance <FaExternalLinkAlt />
+                            <div className="docker-running-row">
+                              <code className="docker-url">{instance.connection_url}</code>
+                              <a
+                                href={instance.connection_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn-primary btn-sm"
+                              >
+                                Open Sandbox <FaExternalLinkAlt />
                               </a>
-                              <button className="danger-btn sm" onClick={handleStopInstance} disabled={instanceBusy}>
-                                <FaStop /> {instanceBusy ? "Stopping..." : "Stop Instance"}
+                              <button
+                                className="btn-danger btn-sm"
+                                onClick={handleStopInstance}
+                                disabled={instanceBusy}
+                              >
+                                <FaStop /> {instanceBusy ? "Stopping..." : "Stop"}
                               </button>
                             </div>
                           ) : (
-                            <button className="primary-btn sm" onClick={handleStartInstance} disabled={instanceBusy}>
-                              <FaPlay /> {instanceBusy ? "Starting..." : "Start Live Instance"}
+                            <button
+                              className="btn-primary btn-sm"
+                              onClick={handleStartInstance}
+                              disabled={instanceBusy}
+                            >
+                              <FaPlay /> {instanceBusy ? "Starting..." : "Start Instance"}
                             </button>
                           )}
                         </div>
@@ -981,77 +725,135 @@ export default function Challenges({ currentUser, onUserUpdated }) {
                     </div>
                   )}
 
-                  {/* Flag Submission Form */}
-                  <form className="flag-submit-form" onSubmit={handleSubmitFlag}>
-                    <label>Submit Captured Flag:</label>
-                    <div className="flag-input-row">
-                      <input
-                        type="text"
-                        placeholder="OWASP{your_captured_flag_here}"
-                        value={flagInput}
-                        onChange={e => setFlagInput(e.target.value)}
-                        required
-                        disabled={submitting}
-                      />
-                      <button type="submit" className="primary-btn submit-btn" disabled={submitting}>
-                        {submitting ? "Checking..." : "Submit Flag"}
-                      </button>
-                    </div>
-                  </form>
-
-                  {/* Submission alerts */}
-                  {submitResult && (
-                    <div className={`alert-banner ${submitResult.type} ${submitResult.is_first_blood ? "first-blood-banner" : ""}`}>
-                      {submitResult.is_first_blood ? (
-                        <div className="fb-alert-inner">
-                          <span className="fb-alert-trophy">🩸 🏆</span>
-                          <div className="fb-alert-text">
-                            <strong>FIRST BLOOD CAPTURED!</strong>
-                            <p>{submitResult.text}</p>
-                          </div>
+                  {/* Flag Submission Area */}
+                  <div className="flag-submission-section">
+                    <h4>Submit Flag</h4>
+                    {activeModalChall.is_solved ? (
+                      <div className="solved-success-banner">
+                        <FaCheckCircle className="check-icon" />
+                        <div>
+                          <b>Challenge already solved</b>
+                          <p>You have successfully captured this flag.</p>
                         </div>
-                      ) : (
-                        <>
-                          {submitResult.type === "success" && <FaCheckCircle />}
-                          <span>{submitResult.text}</span>
-                        </>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    ) : (
+                      <form className="clean-flag-form" onSubmit={handleSubmitFlag}>
+                        <div className="flag-input-group">
+                          <input
+                            type="text"
+                            className="clean-input font-mono"
+                            placeholder="OWASP{your_flag_here}"
+                            value={flagInput}
+                            onChange={e => setFlagInput(e.target.value)}
+                            required
+                            disabled={submitting}
+                          />
+                          <button
+                            type="submit"
+                            className="btn-primary btn-submit-flag"
+                            disabled={submitting || !flagInput.trim()}
+                          >
+                            {submitting ? "Checking..." : "Submit Flag"}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {/* Result Alerts */}
+                    {submitResult && (
+                      <div className={`flag-result-alert ${submitResult.type}`}>
+                        {submitResult.type === "success" && <FaCheckCircle />}
+                        <span>{submitResult.text}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {/* TAB 2: HINT */}
-              {modalTab === "hint" && (
-                <div className="tab-pane">
-                  {advancedHints.length > 0 ? advancedHints.map(h => (
-                    <div className="hint-admin-row" key={h.id} style={{ marginBottom: 12 }}>
-                      <div><div className="hint-title"><FaLightbulb /> {h.order_index}. {h.title}</div>{h.unlocked ? <p>{h.content}</p> : <p>Locked hint — costs <b>{h.cost} points</b>.</p>}</div>
-                      {!h.unlocked && currentUser && <button className="primary-btn unlock-btn" disabled={hintBusy === h.id} onClick={async () => { if (!window.confirm(`Unlock this hint for ${h.cost} points?`)) return; setHintBusy(h.id); try { await api.post(`/challenges/${activeModalChall.id}/hints/${h.id}/unlock`); const r = await api.get(`/challenges/${activeModalChall.id}/hints`); setAdvancedHints(r.data.hints || []); if (onUserUpdated) onUserUpdated(); } catch (err) { setSubmitResult({ type: "error", text: err.response?.data?.detail || "Failed to unlock hint" }); } finally { setHintBusy(null); } }}><FaUnlock /> {hintBusy === h.id ? "Unlocking..." : `Unlock (-${h.cost})`}</button>}
-                    </div>
-                  )) : activeModalChall.hint ? (
-                    activeModalChall.hint_unlocked ? (
-                      <div className="hint-unlocked-box"><div className="hint-title"><FaLightbulb /> Official Challenge Hint</div><p>{activeModalChall.hint}</p></div>
+              {/* TAB 2: HINTS */}
+              {modalTab === "hints" && (
+                <div className="problem-pane">
+                  <div className="hints-container">
+                    <h4>Hints</h4>
+                    {advancedHints.length > 0 ? (
+                      advancedHints.map(h => (
+                        <div className="hint-card" key={h.id}>
+                          <div className="hint-card-head">
+                            <span className="hint-num"><FaLightbulb /> Hint #{h.order_index}</span>
+                            <span className="hint-cost">{h.cost} pts</span>
+                          </div>
+                          {h.unlocked ? (
+                            <p className="hint-content">{h.content}</p>
+                          ) : (
+                            <div className="hint-locked-action">
+                              <p>This hint requires a deduction of <b>{h.cost} points</b> from your score.</p>
+                              <button
+                                className="btn-secondary btn-sm"
+                                disabled={hintBusy === h.id}
+                                onClick={async () => {
+                                  if (!window.confirm(`Unlock this hint for ${h.cost} points?`)) return;
+                                  setHintBusy(h.id);
+                                  try {
+                                    await api.post(`/challenges/${activeModalChall.id}/hints/${h.id}/unlock`);
+                                    const r = await api.get(`/challenges/${activeModalChall.id}/hints`);
+                                    setAdvancedHints(r.data.hints || []);
+                                    if (onUserUpdated) onUserUpdated();
+                                  } catch (err) {
+                                    setSubmitResult({ type: "error", text: err.response?.data?.detail || "Failed to unlock hint" });
+                                  } finally {
+                                    setHintBusy(null);
+                                  }
+                                }}
+                              >
+                                <FaUnlock /> {hintBusy === h.id ? "Unlocking..." : `Unlock Hint (-${h.cost} pts)`}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : activeModalChall.hint ? (
+                      activeModalChall.hint_unlocked ? (
+                        <div className="hint-card">
+                          <div className="hint-card-head">
+                            <span className="hint-num"><FaLightbulb /> Challenge Hint</span>
+                          </div>
+                          <p className="hint-content">{activeModalChall.hint}</p>
+                        </div>
+                      ) : (
+                        <div className="hint-card hint-card-locked">
+                          <FaLock className="lock-icon-subtle" />
+                          <h5>Need a hint to make progress?</h5>
+                          <p>Unlocking this hint will deduct <b>{activeModalChall.hint_cost || 15} points</b> from your total score.</p>
+                          <button className="btn-secondary btn-sm" onClick={handleUnlockHint}>
+                            <FaUnlock /> Unlock Hint (-{activeModalChall.hint_cost || 15} pts)
+                          </button>
+                        </div>
+                      )
                     ) : (
-                      <div className="hint-locked-box"><FaLock className="huge-lock" /><h3>Need a hint to make progress?</h3><p>Unlocking this hint will deduct <b>{activeModalChall.hint_cost || 15} points</b>.</p><button className="primary-btn unlock-btn" onClick={handleUnlockHint}><FaUnlock /> Unlock Hint (-{activeModalChall.hint_cost || 15} PTS)</button></div>
-                    )
-                  ) : <div className="empty-state"><FaLightbulb /><p>No hints have been published for this challenge.</p></div>}
+                      <p className="empty-subtle">No hints available for this challenge.</p>
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* TAB 3: WRITEUP */}
               {modalTab === "writeup" && (
-                <div className="tab-pane">
-                  {!activeModalChall.is_solved && currentUser?.role !== "admin" ? (
-                    <div className="locked-view">
-                      <FaLock className="huge-lock" />
-                      <h3>Writeup Locked</h3>
-                      <p>You must capture the flag first before inspecting the official writeup!</p>
+                <div className="problem-pane">
+                  {!activeModalChall.is_solved && !activeModalChall.event_ended && currentUser?.role !== "admin" ? (
+                    <div className="locked-pane-box">
+                      <FaLock className="lock-pane-icon" />
+                      <h4>Writeup Locked</h4>
+                      <p>You must solve this challenge first or wait until the event closes to view the official writeup and solution walkthrough.</p>
                     </div>
                   ) : (
-                    <div className="writeup-content">
-                      <h3>Official Solution & Writeup</h3>
-                      <div className="markdown-box">
+                    <div className="writeup-container">
+                      <div className="writeup-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                        <h4>Official Solution Writeup</h4>
+                        {activeModalChall.event_ended && !activeModalChall.is_solved && (
+                          <span className="subtle-badge" style={{ color: "var(--accent-cyan)" }}>Event Concluded • Solution Unlocked</span>
+                        )}
+                      </div>
+                      <div className="writeup-code-block font-mono">
                         <pre>{writeupText}</pre>
                       </div>
                     </div>
@@ -1060,44 +862,48 @@ export default function Challenges({ currentUser, onUserUpdated }) {
               )}
 
               {/* TAB 4: DISCUSSION */}
-              {modalTab === "comments" && (
-                <div className="tab-pane">
+              {modalTab === "discussion" && (
+                <div className="problem-pane">
                   {!activeModalChall.is_solved && currentUser?.role !== "admin" ? (
-                    <div className="locked-view">
-                      <FaLock className="huge-lock" />
-                      <h3>Discussion Locked</h3>
-                      <p>To avoid spoilers, comments are only accessible after solving the challenge.</p>
+                    <div className="locked-pane-box">
+                      <FaLock className="lock-pane-icon" />
+                      <h4>Discussion Locked</h4>
+                      <p>To prevent flag leaks and spoilers, challenge discussions are available only after solving.</p>
                     </div>
                   ) : (
-                    <div className="comments-section">
-                      <form className="comment-form" onSubmit={handlePostComment}>
+                    <div className="discussion-container">
+                      <h4>Community Discussions</h4>
+                      <form className="comment-post-form" onSubmit={handlePostComment}>
                         <textarea
-                          placeholder="Share your solving approach or thoughts (no plaintext flags)..."
+                          className="clean-textarea"
+                          placeholder="Share your solving approach or technical thoughts (never post plain flags)..."
                           value={newComment}
                           onChange={e => setNewComment(e.target.value)}
                           rows={3}
                           required
                         />
-                        <button type="submit" className="primary-btn" disabled={commentLoading}>
-                          {commentLoading ? "Posting..." : "Post Comment"}
-                        </button>
+                        <div className="comment-btn-row">
+                          <button type="submit" className="btn-primary btn-sm" disabled={commentLoading}>
+                            {commentLoading ? "Posting..." : "Post Comment"}
+                          </button>
+                        </div>
                       </form>
 
-                      <div className="comments-list">
+                      <div className="comments-thread">
                         {comments.length === 0 ? (
-                          <p className="no-comments">No discussion yet. Be the first to share your thoughts!</p>
+                          <p className="empty-subtle">No comments yet. Be the first to share your perspective!</p>
                         ) : (
                           comments.map(c => (
-                            <div key={c.id} className="comment-item">
-                              <div className="comment-header">
-                                <span className="comment-user">
+                            <div key={c.id} className="comment-card">
+                              <div className="comment-meta">
+                                <span className="comment-author">
                                   {c.user.name} {c.user.college && <small>({c.user.college})</small>}
                                 </span>
-                                <span className="comment-time">
+                                <span className="comment-date">
                                   {new Date(c.created_at).toLocaleDateString()}
                                 </span>
                               </div>
-                              <p className="comment-text">{c.content}</p>
+                              <p className="comment-body">{c.content}</p>
                             </div>
                           ))
                         )}

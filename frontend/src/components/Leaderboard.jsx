@@ -2,28 +2,32 @@ import React, { useState, useEffect } from "react";
 import { api } from "../api";
 import {
   FaTrophy,
-  FaMedal,
-  FaAward,
   FaSearch,
   FaUniversity,
-  FaCheckCircle,
-  FaUsers
+  FaUsers,
+  FaMedal
 } from "react-icons/fa";
 
-export default function Leaderboard({ onSelectUser }) {
+export default function Leaderboard({ onSelectUser, currentUser }) {
   const [viewMode, setViewMode] = useState("global"); // 'global', 'colleges', 'squads'
   const [leaderboard, setLeaderboard] = useState([]);
   const [colleges, setColleges] = useState([]);
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [timeRangeFilter, setTimeRangeFilter] = useState("all");
 
   const fetchData = async () => {
     setLoading(true);
     try {
       if (viewMode === "global") {
         const res = await api.get("/leaderboard", {
-          params: { search: search.trim() || undefined }
+          params: {
+            search: search.trim() || undefined,
+            category: categoryFilter !== "all" ? categoryFilter : undefined,
+            time_range: timeRangeFilter !== "all" ? timeRangeFilter : undefined
+          }
         });
         setLeaderboard(res.data.leaderboard || []);
       } else if (viewMode === "colleges") {
@@ -42,276 +46,261 @@ export default function Leaderboard({ onSelectUser }) {
 
   useEffect(() => {
     fetchData();
-  }, [viewMode, search]);
+  }, [viewMode, search, categoryFilter, timeRangeFilter]);
 
-  // Top 3 Podium for Global
-  const top3 = leaderboard.slice(0, 3);
-  const restList = leaderboard.slice(3);
+  const getRankBadge = (rank) => {
+    if (rank === 1) return <span className="rank-badge rank-1">#1</span>;
+    if (rank === 2) return <span className="rank-badge rank-2">#2</span>;
+    if (rank === 3) return <span className="rank-badge rank-3">#3</span>;
+    return <span className="rank-badge rank-other">#{rank}</span>;
+  };
 
   return (
     <div className="leaderboard-page">
-      {/* Header */}
-      <div className="section-header">
+      <div className="page-header">
         <div>
           <div className="platform-breadcrumb">
-            <span>OWASP PCCOE</span>
+            <span>OWASP PCCOE CTF Academy</span>
             <span className="breadcrumb-sep">/</span>
-            <span>Rankings</span>
+            <span className="breadcrumb-active">Leaderboard</span>
           </div>
-          <h2>OWASP PCCOE Leaderboard</h2>
-          <p className="subtitle">
-            Track top-performing cybersecurity researchers and students across the OWASP PCCOE community.
+          <h1 className="page-title">Leaderboard</h1>
+          <p className="page-subtitle">
+            Community rankings across individual hackers, college campuses, and squads.
           </p>
         </div>
+      </div>
 
-        {/* Search */}
+      {/* Tabs and Search Bar */}
+      <div className="leaderboard-toolbar">
+        <div className="tab-pill-group">
+          <button
+            className={`tab-pill ${viewMode === "global" ? "active" : ""}`}
+            onClick={() => setViewMode("global")}
+          >
+            <FaTrophy /> Individual Hackers
+          </button>
+          <button
+            className={`tab-pill ${viewMode === "colleges" ? "active" : ""}`}
+            onClick={() => setViewMode("colleges")}
+          >
+            <FaUniversity /> College Standings
+          </button>
+          <button
+            className={`tab-pill ${viewMode === "squads" ? "active" : ""}`}
+            onClick={() => setViewMode("squads")}
+          >
+            <FaUsers /> Squad Standings
+          </button>
+        </div>
+
         {viewMode === "global" && (
-          <div className="search-bar">
-            <FaSearch className="search-icon" />
-            <input
-              type="text"
-              placeholder="Search hackers or colleges..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+          <div className="leaderboard-filters-row" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <select
+              className="clean-select"
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              title="Filter by domain"
+            >
+              <option value="all">All Domains</option>
+              <option value="Web Exploitation">Web Exploitation</option>
+              <option value="Cryptography">Cryptography</option>
+              <option value="Forensics">Forensics</option>
+              <option value="Reverse Engineering">Reverse Engineering</option>
+              <option value="Pwn/Binary Exploitation">Pwn / Binary</option>
+              <option value="OSINT">OSINT</option>
+              <option value="Steganography">Steganography</option>
+              <option value="Misc">Misc</option>
+            </select>
+
+            <select
+              className="clean-select"
+              value={timeRangeFilter}
+              onChange={e => setTimeRangeFilter(e.target.value)}
+              title="Filter by time range"
+            >
+              <option value="all">All Time</option>
+              <option value="month">This Month</option>
+              <option value="week">This Week</option>
+            </select>
+
+            <div className="leaderboard-search-box">
+              <FaSearch className="filter-search-icon" />
+              <input
+                type="text"
+                className="filter-search-input"
+                placeholder="Search hackers or colleges..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
           </div>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="tab-buttons">
-        <button
-          className={`tab-btn ${viewMode === "global" ? "active" : ""}`}
-          onClick={() => setViewMode("global")}
-        >
-          <FaTrophy /> Individual Hackers
-        </button>
-        <button
-          className={`tab-btn ${viewMode === "colleges" ? "active" : ""}`}
-          onClick={() => setViewMode("colleges")}
-        >
-          <FaUniversity /> College Standings
-        </button>
-        <button
-          className={`tab-btn ${viewMode === "squads" ? "active" : ""}`}
-          onClick={() => setViewMode("squads")}
-        >
-          <FaUsers /> Squad Standings
-        </button>
-      </div>
-
+      {/* Table Content */}
       {loading ? (
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Calculating live rankings...</p>
+        <div className="table-skeleton-wrap">
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
         </div>
       ) : viewMode === "global" ? (
-        <>
-          {/* Top 3 Podium Showcase */}
-          {top3.length > 0 && (
-            <div className="podium-container">
-              {/* 2nd Place */}
-              {top3[1] && (
-                <div
-                  className="podium-card rank-2"
-                  onClick={() => onSelectUser(top3[1].id)}
-                >
-                  <div className="medal-icon silver">
-                    <FaMedal />
-                  </div>
-                  <span className="podium-rank">#2</span>
-                  <h4>{top3[1].name}</h4>
-                  <small className="college-name">{top3[1].college || "Independent"}</small>
-                  <div className="podium-score">
-                    <b>{top3[1].points}</b> PTS
-                  </div>
-                  <span className="solves-count">{top3[1].challenges_solved} Solves</span>
-                </div>
-              )}
-
-              {/* 1st Place */}
-              {top3[0] && (
-                <div
-                  className="podium-card rank-1"
-                  onClick={() => onSelectUser(top3[0].id)}
-                >
-                  <div className="crown-badge">👑 CHAMPION</div>
-                  <div className="medal-icon gold">
-                    <FaTrophy />
-                  </div>
-                  <span className="podium-rank">#1</span>
-                  <h4>{top3[0].name}</h4>
-                  <small className="college-name">{top3[0].college || "Independent"}</small>
-                  <div className="podium-score">
-                    <b>{top3[0].points}</b> PTS
-                  </div>
-                  <span className="solves-count">{top3[0].challenges_solved} Solves</span>
-                </div>
-              )}
-
-              {/* 3rd Place */}
-              {top3[2] && (
-                <div
-                  className="podium-card rank-3"
-                  onClick={() => onSelectUser(top3[2].id)}
-                >
-                  <div className="medal-icon bronze">
-                    <FaAward />
-                  </div>
-                  <span className="podium-rank">#3</span>
-                  <h4>{top3[2].name}</h4>
-                  <small className="college-name">{top3[2].college || "Independent"}</small>
-                  <div className="podium-score">
-                    <b>{top3[2].points}</b> PTS
-                  </div>
-                  <span className="solves-count">{top3[2].challenges_solved} Solves</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Full Table */}
-          <div className="table-card">
-            <div className="table-responsive">
-              <table className="custom-table clickable-table">
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Hacker</th>
-                    <th>College</th>
-                    <th>Solves</th>
-                    <th>Points</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaderboard.map(u => (
-                    <tr
-                      key={u.id}
-                      onClick={() => onSelectUser(u.id)}
-                      title="Click to inspect LeetCode profile"
-                    >
-                      <td className="rank-cell">
-                        {u.rank === 1 ? <FaTrophy className="gold" /> :
-                         u.rank === 2 ? <FaMedal className="silver" /> :
-                         u.rank === 3 ? <FaAward className="bronze" /> :
-                         <b>#{u.rank}</b>}
-                      </td>
-                      <td>
-                        <div className="user-table-cell">
-                          <div className="avatar-chip small">
-                            {u.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <b>{u.name}</b>
-                            <small className="view-profile-hint">View Profile</small>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span className="college-text">{u.college || "Independent"}</span>
-                      </td>
-                      <td>
-                        <span className="solve-chip">
-                          <FaCheckCircle /> {u.challenges_solved}
-                        </span>
-                      </td>
-                      <td>
-                        <b className="points-text">{u.points}</b>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      ) : viewMode === "colleges" ? (
-        /* College Standings View */
-        <div className="table-card">
+        <div className="card table-card">
           <div className="table-responsive">
-            <table className="custom-table">
+            <table className="clean-table">
               <thead>
                 <tr>
-                  <th>Rank</th>
-                  <th>College / Institution</th>
-                  <th>Active Hackers</th>
-                  <th>Total Flags Captured</th>
-                  <th>Aggregated Score</th>
+                  <th style={{ width: "70px", textAlign: "center" }}>Rank</th>
+                  <th>Hacker</th>
+                  <th>Affiliation / College</th>
+                  <th style={{ width: "130px", textAlign: "right" }}>Solves</th>
+                  <th style={{ width: "130px", textAlign: "right" }}>Score</th>
                 </tr>
               </thead>
               <tbody>
-                {colleges.map(c => (
-                  <tr key={c.college}>
-                    <td className="rank-cell">
-                      {c.rank === 1 ? <FaTrophy className="gold" /> :
-                       c.rank === 2 ? <FaMedal className="silver" /> :
-                       c.rank === 3 ? <FaAward className="bronze" /> :
-                       <b>#{c.rank}</b>}
+                {leaderboard.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="table-empty">
+                      No hackers found matching your search.
                     </td>
-                    <td>
-                      <div className="college-row-title">
-                        <FaUniversity className="uni-icon" />
-                        <b>{c.college}</b>
-                      </div>
-                    </td>
-                    <td>{c.members_count} members</td>
-                    <td>{c.total_solves} solves</td>
-                    <td><b className="points-text">{c.total_points} PTS</b></td>
                   </tr>
-                ))}
+                ) : (
+                  leaderboard.map((user, idx) => {
+                    const isSelf = currentUser && currentUser.id === user.id;
+                    return (
+                      <tr
+                        key={user.id}
+                        className={`clickable-row ${isSelf ? "highlight-self-row" : ""}`}
+                        onClick={() => onSelectUser(user.id)}
+                      >
+                        <td style={{ textAlign: "center" }}>
+                          {getRankBadge(idx + 1)}
+                        </td>
+                        <td>
+                          <div className="user-name-cell">
+                            <div className="avatar-chip small">
+                              {user.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="user-name-info">
+                              <b>{user.name}</b>
+                              {isSelf && <span className="self-tag">You</span>}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="college-cell">{user.college || "Independent / PCCOE"}</span>
+                        </td>
+                        <td style={{ textAlign: "right" }} className="mono-solves">
+                          {user.challenges_solved}
+                        </td>
+                        <td style={{ textAlign: "right" }} className="mono-points">
+                          {user.points?.toLocaleString()} pts
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : viewMode === "colleges" ? (
+        <div className="card table-card">
+          <div className="table-responsive">
+            <table className="clean-table">
+              <thead>
+                <tr>
+                  <th style={{ width: "70px", textAlign: "center" }}>Rank</th>
+                  <th>College Institution</th>
+                  <th style={{ width: "150px", textAlign: "right" }}>Students</th>
+                  <th style={{ width: "150px", textAlign: "right" }}>Total Solves</th>
+                  <th style={{ width: "150px", textAlign: "right" }}>Total Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                {colleges.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="table-empty">
+                      No college records available yet.
+                    </td>
+                  </tr>
+                ) : (
+                  colleges.map((col, idx) => (
+                    <tr key={col.college || idx}>
+                      <td style={{ textAlign: "center" }}>
+                        {getRankBadge(idx + 1)}
+                      </td>
+                      <td>
+                        <div className="college-name-cell">
+                          <FaUniversity className="college-icon-subtle" />
+                          <b>{col.college || "Independent"}</b>
+                        </div>
+                      </td>
+                      <td style={{ textAlign: "right" }} className="mono-stat">
+                        {col.members_count}
+                      </td>
+                      <td style={{ textAlign: "right" }} className="mono-solves">
+                        {col.total_solves}
+                      </td>
+                      <td style={{ textAlign: "right" }} className="mono-points">
+                        {col.total_points?.toLocaleString()} pts
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
       ) : (
-        /* Squad Standings View */
-        <div className="table-card">
+        <div className="card table-card">
           <div className="table-responsive">
-            <table className="custom-table">
+            <table className="clean-table">
               <thead>
                 <tr>
-                  <th>Rank</th>
-                  <th>Squad / Team</th>
-                  <th>Members</th>
-                  <th>Flags Captured</th>
-                  <th>Aggregated Score</th>
+                  <th style={{ width: "70px", textAlign: "center" }}>Rank</th>
+                  <th>Squad Name</th>
+                  <th>Captain</th>
+                  <th style={{ width: "120px", textAlign: "right" }}>Members</th>
+                  <th style={{ width: "120px", textAlign: "right" }}>Solves</th>
+                  <th style={{ width: "130px", textAlign: "right" }}>Points</th>
                 </tr>
               </thead>
               <tbody>
                 {teams.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="no-data">
-                      No squads registered yet. Form a squad in the Squad Hub!
+                    <td colSpan="6" className="table-empty">
+                      No squads registered yet.
                     </td>
                   </tr>
                 ) : (
-                  teams.map(t => (
-                    <tr key={t.team_id}>
-                      <td className="rank-cell">
-                        {t.rank === 1 ? <FaTrophy className="gold" /> :
-                         t.rank === 2 ? <FaMedal className="silver" /> :
-                         t.rank === 3 ? <FaAward className="bronze" /> :
-                         <b>#{t.rank}</b>}
+                  teams.map((tm, idx) => (
+                    <tr key={tm.id || idx}>
+                      <td style={{ textAlign: "center" }}>
+                        {getRankBadge(idx + 1)}
                       </td>
                       <td>
-                        <div className="user-table-cell">
-                          <div className="avatar-chip small">
-                            <FaUsers />
-                          </div>
+                        <div className="squad-name-cell">
+                          <FaUsers className="squad-icon-subtle" />
                           <div>
-                            <b>{t.name}</b>
-                            <small className="view-profile-hint">Code: {t.slug}</small>
+                            <b>{tm.name}</b>
+                            <span className="squad-slug-sub">/{tm.slug}</span>
                           </div>
                         </div>
                       </td>
-                      <td>{t.member_count}/5 members</td>
                       <td>
-                        <span className="solve-chip">
-                          <FaCheckCircle /> {t.challenges_solved}
-                        </span>
+                        <span className="owner-cell">{tm.owner_name}</span>
                       </td>
-                      <td>
-                        <b className="points-text">{t.points} PTS</b>
+                      <td style={{ textAlign: "right" }} className="mono-stat">
+                        {tm.members_count || 1}
+                      </td>
+                      <td style={{ textAlign: "right" }} className="mono-solves">
+                        {tm.total_solves || 0}
+                      </td>
+                      <td style={{ textAlign: "right" }} className="mono-points">
+                        {(tm.total_points || 0).toLocaleString()} pts
                       </td>
                     </tr>
                   ))

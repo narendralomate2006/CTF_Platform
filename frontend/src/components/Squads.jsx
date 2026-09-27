@@ -3,17 +3,15 @@ import { api } from "../api";
 import {
   FaUsers,
   FaPlus,
-  FaSignInAlt,
   FaSignOutAlt,
   FaCopy,
   FaSyncAlt,
   FaCheck,
   FaTimes,
   FaPaperPlane,
-  FaClock,
   FaEnvelopeOpenText,
-  FaShieldAlt,
-  FaUserGraduate
+  FaCrown,
+  FaSearch
 } from "react-icons/fa";
 
 export default function Squads({ currentUser }) {
@@ -29,6 +27,7 @@ export default function Squads({ currentUser }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   // Join Modal State
   const [targetTeam, setTargetTeam] = useState(null);
@@ -88,6 +87,12 @@ export default function Squads({ currentUser }) {
     act(() => api.delete(`/teams/requests/${requestId}/cancel`));
   };
 
+  const copySlug = (code) => {
+    navigator.clipboard?.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const visible = teams.filter(t =>
     `${t.name} ${t.slug} ${t.owner_name}`.toLowerCase().includes(search.toLowerCase())
   );
@@ -96,17 +101,22 @@ export default function Squads({ currentUser }) {
 
   return (
     <div className="squads-page">
-      <div className="section-header">
+      <div className="page-header">
         <div>
           <div className="platform-breadcrumb">
-            <span>OWASP PCCOE</span>
+            <span>OWASP PCCOE CTF Academy</span>
             <span className="breadcrumb-sep">/</span>
-            <span>Squads & Community</span>
+            <span className="breadcrumb-active">Squad Hub</span>
           </div>
-          <h2>OWASP PCCOE Squad Hub</h2>
-          <p className="subtitle">Build and manage collaborative squads with fellow PCCOE cybersecurity students.</p>
+          <h1 className="page-title">Squads & Teams</h1>
+          <p className="page-subtitle">
+            Collaborate in cybersecurity squads, compete in team CTFs, and track squad ranks.
+          </p>
         </div>
-        <button className="secondary-btn" onClick={load}><FaSyncAlt /> Refresh</button>
+
+        <button className="btn-secondary btn-sm" onClick={load}>
+          <FaSyncAlt /> Refresh
+        </button>
       </div>
 
       {message && <div className="alert-banner success">{message}</div>}
@@ -114,106 +124,97 @@ export default function Squads({ currentUser }) {
 
       {/* CURRENT SQUAD CARD */}
       {current && (
-        <div className="squad-current-card">
-          <div>
-            <span className="sub-tag">CURRENT SQUAD</span>
-            <h3>{current.name}</h3>
-            <p>
-              Join code: <code>{current.slug}</code>{" "}
-              <button
-                className="mini-icon"
-                title="Copy join code"
-                onClick={() => navigator.clipboard?.writeText(current.slug)}
-              >
-                <FaCopy />
-              </button>
-            </p>
-            <div className="member-row">
-              {current.members.map(m => (
-                <span key={m.id} className="member-chip" title={m.college || ""}>
-                  {m.id === current.owner_id ? "👑 " : ""}{m.name} ({m.college || "Independent"})
-                </span>
+        <div className="card current-squad-card">
+          <div className="current-squad-head">
+            <div>
+              <span className="section-kicker">MY SQUAD</span>
+              <h2 className="current-squad-title">{current.name}</h2>
+              <div className="squad-code-pill">
+                <span>Join code:</span>
+                <code>{current.slug}</code>
+                <button
+                  className="btn-copy-mini"
+                  onClick={() => copySlug(current.slug)}
+                  title="Copy join code"
+                >
+                  {copied ? <FaCheck /> : <FaCopy />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              className="btn-danger btn-sm"
+              disabled={busy}
+              onClick={() => {
+                if (window.confirm("Are you sure you want to leave this squad?")) {
+                  act(() => api.post("/teams/leave"));
+                }
+              }}
+            >
+              <FaSignOutAlt /> Leave Squad
+            </button>
+          </div>
+
+          <div className="squad-members-strip">
+            <h4>Team Members ({current.members?.length || 1})</h4>
+            <div className="squad-member-chips">
+              {current.members?.map(m => (
+                <div key={m.id} className="squad-member-chip">
+                  {m.id === current.owner_id && <FaCrown className="crown-icon-mini" title="Squad Captain" />}
+                  <b>{m.name}</b>
+                  {m.college && <small>({m.college})</small>}
+                </div>
               ))}
             </div>
           </div>
-          <button
-            className="danger-btn"
-            disabled={busy}
-            onClick={() => act(() => api.post("/teams/leave"))}
-          >
-            <FaSignOutAlt /> Leave Squad
-          </button>
         </div>
       )}
 
       {/* SQUAD LEADER: INCOMING JOIN REQUESTS PANEL */}
       {isOwner && (
-        <div className="table-card squad-requests-panel" style={{ marginBottom: 18, border: "1px solid var(--accent-cyan)" }}>
-          <div className="section-header" style={{ marginBottom: 12 }}>
+        <div className="card leader-requests-card">
+          <div className="card-header-clean">
             <div>
-              <span className="sub-tag" style={{ color: "var(--accent-cyan)" }}>SQUAD LEADER INBOX</span>
-              <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="section-kicker">SQUAD LEADER INBOX</span>
+              <h3 className="card-title">
                 <FaEnvelopeOpenText /> Pending Join Requests ({incomingRequests.length})
               </h3>
             </div>
           </div>
+
           {incomingRequests.length === 0 ? (
-            <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>
-              No pending join requests right now. When players request to join {current.name} with a note, they will appear here for your review.
+            <p className="empty-subtle">
+              No pending join requests right now. When players apply to join {current.name}, they will appear here.
             </p>
           ) : (
-            <div style={{ display: "grid", gap: 12 }}>
+            <div className="squad-request-list">
               {incomingRequests.map(req => (
-                <div
-                  key={req.id}
-                  className="squad-request-item"
-                  style={{
-                    background: "var(--bg-input)",
-                    border: "1px solid var(--border-color)",
-                    borderRadius: 10,
-                    padding: 14,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: 16,
-                    flexWrap: "wrap"
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 240 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                      <b style={{ fontSize: 15 }}>{req.user_name}</b>
-                      <span className="member-chip"><FaUserGraduate style={{ marginRight: 4 }} />{req.user_college}</span>
-                      <span style={{ fontSize: 12, color: "var(--accent-gold)", fontWeight: "bold" }}>{req.user_points} PTS</span>
+                <div key={req.id} className="squad-request-item">
+                  <div className="request-user-info">
+                    <div className="request-title-line">
+                      <b>{req.user_name}</b>
+                      {req.user_college && <small>({req.user_college})</small>}
+                      <span className="request-points-tag font-mono">{req.user_points} pts</span>
                     </div>
-                    <div style={{
-                      background: "rgba(85,214,190,0.06)",
-                      borderLeft: "3px solid var(--accent-cyan)",
-                      padding: "8px 12px",
-                      borderRadius: "0 6px 6px 0",
-                      marginTop: 6,
-                      fontSize: 13,
-                      color: "var(--text-primary)"
-                    }}>
-                      <b>Note from applicant:</b>{" "}
-                      {req.note ? <span>"{req.note}"</span> : <i style={{ color: "var(--text-muted)" }}>No note provided</i>}
-                    </div>
-                    <small style={{ color: "var(--text-muted)", display: "block", marginTop: 6 }}>
-                      Requested: {new Date(req.created_at).toLocaleString()}
-                    </small>
+                    {req.note && (
+                      <p className="request-note-box">"{req.note}"</p>
+                    )}
+                    <span className="meta-muted">
+                      Requested: {new Date(req.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+                    </span>
                   </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+
+                  <div className="request-actions">
                     <button
-                      className="primary-btn sm"
-                      style={{ background: "#10b981", borderColor: "#10b981", display: "flex", alignItems: "center", gap: 6 }}
+                      className="btn-primary btn-sm"
                       disabled={busy}
                       onClick={() => handleRespond(req.id, "accept")}
                     >
-                      <FaCheck /> Accept & Add
+                      <FaCheck /> Accept
                     </button>
                     <button
-                      className="danger-btn sm"
+                      className="btn-danger btn-sm"
                       disabled={busy}
-                      style={{ display: "flex", alignItems: "center", gap: 6 }}
                       onClick={() => handleRespond(req.id, "reject")}
                     >
                       <FaTimes /> Decline
@@ -228,231 +229,190 @@ export default function Squads({ currentUser }) {
 
       {/* CREATE / JOIN SQUAD (WHEN NOT IN SQUAD) */}
       {!mine && (
-        <div className="squad-create-grid">
-          <div className="table-card squad-action-card">
-            <h3><FaPlus /> Create Squad</h3>
-            <p>Form your own squad and become the squad leader. You can review and approve incoming teammate applications.</p>
-            <div className="inline-form">
+        <div className="squad-onboarding-grid">
+          <div className="card">
+            <div className="card-header-clean">
+              <h3 className="card-title"><FaPlus /> Create a Squad</h3>
+            </div>
+            <p className="card-desc">
+              Form your own squad and become the squad leader. You can review applications from teammates.
+            </p>
+            <div className="clean-inline-form">
               <input
+                type="text"
+                className="clean-input"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="e.g. Null Pointers"
+                placeholder="Squad name (e.g. PCCOE Cyber Sec)"
               />
               <button
-                className="primary-btn"
+                className="btn-primary btn-sm"
                 disabled={busy || !name.trim()}
                 onClick={() => act(() => api.post("/teams", { name }))}
               >
-                Create
+                Create Squad
               </button>
             </div>
           </div>
 
-          <div className="table-card squad-action-card">
-            <h3><FaSignInAlt /> Request Join by Code</h3>
-            <p>Have a squad join code? Send a request with a note to the squad leader.</p>
-            <div style={{ display: "grid", gap: 8 }}>
+          <div className="card">
+            <div className="card-header-clean">
+              <h3 className="card-title"><FaUsers /> Join via Squad Code</h3>
+            </div>
+            <p className="card-desc">
+              Enter the unique invite code or slug provided by your squad leader.
+            </p>
+            <div className="clean-inline-form">
               <input
-                className="search-bar-input"
+                type="text"
+                className="clean-input"
                 value={slug}
                 onChange={e => setSlug(e.target.value)}
-                placeholder="Squad slug (e.g. null-pointers)"
-              />
-              <input
-                className="search-bar-input"
-                value={slugNote}
-                onChange={e => setSlugNote(e.target.value)}
-                placeholder="Note to leader (e.g. Web/Crypto specialist)"
+                placeholder="Squad code (e.g. pccoe-cyber)"
               />
               <button
-                className="primary-btn"
+                className="btn-secondary btn-sm"
                 disabled={busy || !slug.trim()}
                 onClick={handleJoinBySlug}
-                style={{ width: "fit-content" }}
               >
-                <FaPaperPlane /> Send Join Request
+                Join Squad
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* SQUAD SCOREBOARD */}
-      <div className="table-card" style={{ marginBottom: 16 }}>
-        <div className="section-header">
+      {/* SQUAD DIRECTORY & LEADERBOARD */}
+      <div className="card table-card">
+        <div className="card-header-clean">
           <div>
-            <span className="sub-tag">GLOBAL SQUAD SCOREBOARD</span>
-            <h3>Team Rankings</h3>
+            <h3 className="card-title">Squad Directory ({visible.length})</h3>
+            <span className="card-desc">Active teams across the academy</span>
+          </div>
+
+          <div className="filter-search-box">
+            <FaSearch className="filter-search-icon" />
+            <input
+              type="text"
+              className="filter-search-input"
+              placeholder="Search squads or captains..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           </div>
         </div>
+
         <div className="table-responsive">
-          <table className="custom-table">
+          <table className="clean-table">
             <thead>
               <tr>
-                <th>Rank</th>
                 <th>Squad</th>
-                <th>Members</th>
-                <th>Solves</th>
-                <th>Points</th>
+                <th>Captain</th>
+                <th style={{ width: "110px", textAlign: "right" }}>Members</th>
+                <th style={{ width: "110px", textAlign: "right" }}>Solves</th>
+                <th style={{ width: "120px", textAlign: "right" }}>Points</th>
+                <th style={{ width: "130px", textAlign: "center" }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {leaderboard.length === 0 ? (
+              {visible.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: "center", color: "var(--text-muted)" }}>
-                    No squads registered yet.
+                  <td colSpan="6" className="table-empty">
+                    No squads found matching your search.
                   </td>
                 </tr>
               ) : (
-                leaderboard.slice(0, 10).map(r => (
-                  <tr key={r.team_id}>
-                    <td>#{r.rank}</td>
-                    <td><b>{r.name}</b></td>
-                    <td>{r.member_count}/5</td>
-                    <td>{r.challenges_solved}</td>
-                    <td><b>{r.points} PTS</b></td>
-                  </tr>
-                ))
+                visible.map(t => {
+                  const isMySquad = t.id === mine;
+                  const isPending = !!myPendingRequests[t.id];
+
+                  return (
+                    <tr key={t.id}>
+                      <td>
+                        <div className="squad-title-cell">
+                          <b>{t.name}</b>
+                          <small className="meta-muted">/{t.slug}</small>
+                        </div>
+                      </td>
+                      <td>{t.owner_name}</td>
+                      <td style={{ textAlign: "right" }} className="mono-stat">
+                        {t.members_count || 1}
+                      </td>
+                      <td style={{ textAlign: "right" }} className="mono-solves">
+                        {t.total_solves || 0}
+                      </td>
+                      <td style={{ textAlign: "right" }} className="mono-points">
+                        {(t.total_points || 0).toLocaleString()} pts
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        {isMySquad ? (
+                          <span className="status-solved">Your Squad</span>
+                        ) : isPending ? (
+                          <button
+                            className="btn-secondary btn-sm"
+                            disabled={busy}
+                            onClick={() => handleCancelRequest(myPendingRequests[t.id])}
+                          >
+                            Cancel Request
+                          </button>
+                        ) : !mine ? (
+                          <button
+                            className="btn-secondary btn-sm"
+                            disabled={busy}
+                            onClick={() => setTargetTeam(t)}
+                          >
+                            Request to Join
+                          </button>
+                        ) : (
+                          <span className="meta-muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* SQUADS DIRECTORY */}
-      <div className="toolbar-card">
-        <input
-          className="search-bar-input"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search squads by name, join code, or owner..."
-        />
-      </div>
-
-      <div className="squad-grid">
-        {visible.map(t => {
-          const pending = myPendingRequests[t.id];
-          const isFull = t.member_count >= 5;
-          const isMyTeam = t.id === mine;
-
-          return (
-            <div className="squad-card" key={t.id}>
-              <div className="squad-card-head">
-                <div className="squad-avatar"><FaUsers /></div>
-                <div>
-                  <h3>{t.name}</h3>
-                  <code>{t.slug}</code>
-                </div>
-              </div>
-
-              <p style={{ margin: "6px 0", fontSize: 13 }}>
-                Leader: <b>{t.owner_name}</b>
-              </p>
-
-              <div className="member-row">
-                {t.members.map(m => (
-                  <span key={m.id} className="member-chip" title={m.college || ""}>
-                    {m.id === t.owner_id ? "👑 " : ""}{m.name}
-                  </span>
-                ))}
-              </div>
-
-              {pending && (
-                <div style={{
-                  background: "rgba(234,179,8,0.1)",
-                  border: "1px solid rgba(234,179,8,0.3)",
-                  borderRadius: 8,
-                  padding: "8px 10px",
-                  fontSize: 12,
-                  marginBottom: 10,
-                  color: "#eab308"
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span><FaClock /> <b>Request Pending</b></span>
-                    <button
-                      className="link-btn"
-                      style={{ color: "#ef4444", fontSize: 11, padding: 0 }}
-                      disabled={busy}
-                      onClick={() => handleCancelRequest(pending.request_id)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  {pending.note && (
-                    <small style={{ display: "block", marginTop: 4, color: "var(--text-secondary)" }}>
-                      "{pending.note}"
-                    </small>
-                  )}
-                </div>
-              )}
-
-              <div className="squad-card-foot">
-                <span>{t.member_count}/5 members {isFull && "(Full)"}</span>
-                {!mine && !isMyTeam && (
-                  pending ? (
-                    <button
-                      className="secondary-btn sm"
-                      style={{ borderColor: "#eab308", color: "#eab308" }}
-                      disabled={busy}
-                      onClick={() => { setTargetTeam(t); setRequestNote(pending.note || ""); }}
-                    >
-                      Edit Note
-                    </button>
-                  ) : (
-                    <button
-                      className="primary-btn sm"
-                      disabled={busy || isFull}
-                      onClick={() => { setTargetTeam(t); setRequestNote(""); }}
-                    >
-                      <FaPaperPlane /> Request to Join
-                    </button>
-                  )
-                )}
-                {isMyTeam && <span style={{ color: "var(--accent-cyan)", fontWeight: "bold" }}>Your Squad</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* REQUEST TO JOIN MODAL */}
+      {/* Request to Join Modal with Custom Note */}
       {targetTeam && (
         <div className="modal-backdrop" onClick={() => setTargetTeam(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <button className="close-btn" onClick={() => setTargetTeam(null)}>×</button>
-            <div className="modal-header" style={{ marginBottom: 16 }}>
-              <h2 style={{ fontSize: 18, display: "flex", alignItems: "center", gap: 8 }}>
-                <FaShieldAlt style={{ color: "var(--accent-cyan)" }} /> Join {targetTeam.name}
-              </h2>
+          <div className="clean-modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header-simple">
+              <h3>Join Request: {targetTeam.name}</h3>
+              <button className="modal-close-icon-btn" onClick={() => setTargetTeam(null)}>
+                <FaTimes />
+              </button>
             </div>
-            <div>
-              <p style={{ color: "var(--text-secondary)", fontSize: 14, marginBottom: 14 }}>
-                Send a join request to squad leader <b>{targetTeam.owner_name}</b>. Write a note introducing yourself, your cybersecurity interests, or previous CTF experience.
-              </p>
-              <div className="form-group" style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", marginBottom: 6, fontWeight: "bold", fontSize: 13 }}>
-                  Note to Squad Leader
-                </label>
-                <textarea
-                  className="search-bar-input"
-                  style={{ minHeight: 90, resize: "vertical", width: "100%", fontFamily: "inherit" }}
-                  placeholder="e.g. Hi, I focus on Reverse Engineering and Cryptography. Would love to join your squad for the upcoming CTF!"
-                  value={requestNote}
-                  onChange={e => setRequestNote(e.target.value)}
-                />
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <button className="secondary-btn" onClick={() => setTargetTeam(null)}>
-                  Cancel
-                </button>
-                <button
-                  className="primary-btn"
-                  disabled={busy}
-                  onClick={() => handleSendRequest(targetTeam.id, requestNote)}
-                >
-                  <FaPaperPlane /> Send Request
-                </button>
-              </div>
+
+            <p className="modal-lead-text">
+              Send an application to Captain <b>{targetTeam.owner_name}</b> to join this squad.
+            </p>
+
+            <div className="form-group">
+              <label>Applicant Note (Optional)</label>
+              <textarea
+                className="clean-textarea"
+                rows={3}
+                placeholder="Mention your skills, domains of interest (Web, Crypto, etc.), or college year..."
+                value={requestNote}
+                onChange={e => setRequestNote(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-actions-row">
+              <button className="btn-secondary btn-sm" onClick={() => setTargetTeam(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary btn-sm"
+                disabled={busy}
+                onClick={() => handleSendRequest(targetTeam.id, requestNote.trim())}
+              >
+                <FaPaperPlane /> Send Request
+              </button>
             </div>
           </div>
         </div>

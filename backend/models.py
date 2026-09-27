@@ -103,6 +103,10 @@ class Challenge(Base):
     runtime_port = Column(Integer, nullable=True)
     runtime_protocol = Column(String(20), default="http", nullable=False)
     instance_timeout_minutes = Column(Integer, default=60, nullable=False)
+    scoring_mode = Column(String(20), default="static", nullable=False)  # static, decaying
+    initial_points = Column(Integer, default=100, nullable=False)
+    min_points = Column(Integer, default=50, nullable=False)
+    decay_limit = Column(Integer, default=20, nullable=False)
 
     # Relationships
     event = relationship("Event", back_populates="challenges")

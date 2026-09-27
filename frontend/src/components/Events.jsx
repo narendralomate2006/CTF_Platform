@@ -1,23 +1,21 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { api } from "../api";
 import {
-  FaShieldAlt,
   FaClock,
   FaCheckCircle,
-  FaSnowflake,
-  FaCertificate,
   FaCalendarAlt,
   FaTrophy,
-  FaUserCheck,
-  FaTimes,
-  FaPrint,
-  FaLock,
+  FaUsers,
   FaFlag,
-  FaDownload,
-  FaExternalLinkAlt
+  FaLock,
+  FaCertificate,
+  FaExternalLinkAlt,
+  FaTimes,
+  FaPlay,
+  FaShieldAlt
 } from "react-icons/fa";
 
-// Real-time countdown hook
+// Countdown hook
 function useCountdown(endDate, startDate, status) {
   const [secs, setSecs] = useState(0);
 
@@ -51,35 +49,17 @@ function formatCountdown(totalSecs) {
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 
-// Individual event countdown component
-function EventCountdown({ event }) {
-  const secs = useCountdown(event.end_date, event.start_date, event.status);
-
-  if (event.status === "ended") {
-    return <span className="countdown-text ended-text">Event Concluded</span>;
-  }
-
-  return (
-    <div className="countdown-block">
-      <FaClock className="clock-icon" />
-      <span className="countdown-label">
-        {event.status === "upcoming" ? "Starts in:" : "Ends in:"}
-      </span>
-      <span className="countdown-digits">{formatCountdown(secs)}</span>
-    </div>
-  );
-}
-
 export default function Events({ currentUser, onEnterArena }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [eventLeaderboard, setEventLeaderboard] = useState(null);
+  const [myTeam, setMyTeam] = useState(null);
+  const [registrationModal, setRegistrationModal] = useState(null);
+  const [selectedRegType, setSelectedRegType] = useState("solo"); // solo or team
   const [activeCert, setActiveCert] = useState(null);
   const [certLoading, setCertLoading] = useState(false);
   const [certError, setCertError] = useState("");
-  const [myTeam, setMyTeam] = useState(null);
-  const [registrationChoice, setRegistrationChoice] = useState(null);
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -91,7 +71,7 @@ export default function Events({ currentUser, onEnterArena }) {
         setSelectedEventId(evs[0].id);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching events:", err);
     } finally {
       setLoading(false);
     }
@@ -112,11 +92,16 @@ export default function Events({ currentUser, onEnterArena }) {
       .catch(err => console.error(err));
   }, [selectedEventId]);
 
+  const selectedEvent = events.find(e => e.id === selectedEventId) || events[0] || null;
+  const countdownSecs = useCountdown(selectedEvent?.end_date, selectedEvent?.start_date, selectedEvent?.status);
+
   const handleRegister = async (evId, teamId = null) => {
     try {
-      const res = await api.post(`/events/${evId}/register`, null, { params: teamId ? { team_id: teamId } : {} });
-      alert(res.data.message);
-      setRegistrationChoice(null);
+      const res = await api.post(`/events/${evId}/register`, null, {
+        params: teamId ? { team_id: teamId } : {}
+      });
+      alert(res.data.message || "Successfully registered!");
+      setRegistrationModal(null);
       fetchEvents();
     } catch (err) {
       alert(err.response?.data?.detail || "Registration failed");
@@ -124,321 +109,338 @@ export default function Events({ currentUser, onEnterArena }) {
   };
 
   const handleViewCertificate = async (ev) => {
-    // Only allow after event has ended
     if (ev.status !== "ended") {
-      setCertError("Certificates are issued only after the event has concluded.");
+      setCertError("Certificates are issued only after the competition concludes.");
       setActiveCert(null);
       return;
     }
-
     if (!ev.is_registered) {
       setCertError("You must be registered for this event to receive a certificate.");
       return;
     }
-
     setCertError("");
     setCertLoading(true);
     try {
+      // Correct backend route: GET /events/{id}/certificate
       const res = await api.get(`/events/${ev.id}/certificate`);
-      setActiveCert(res.data.certificate);
+      const raw = res.data.certificate;
+      // Normalize field names from backend response to what the modal expects
+      setActiveCert({
+        ...raw,
+        recipient_name: raw.student_name || raw.recipient_name || raw.participant_name,
+        issued_at: raw.issued_date || raw.issued_at,
+        id: raw.certificate_id || raw.id,
+        download_url: raw.download_url,
+      });
     } catch (err) {
-      setCertError(err.response?.data?.detail || "Unable to generate certificate");
+      setCertError(err.response?.data?.detail || "Certificate not found. It may not have been generated yet by the admin.");
     } finally {
       setCertLoading(false);
     }
   };
 
-  const selectedEvent = events.find(e => e.id === selectedEventId);
-
   return (
     <div className="events-page">
-      <div className="section-header">
+      <div className="page-header">
         <div>
           <div className="platform-breadcrumb">
-            <span>OWASP PCCOE</span>
+            <span>OWASP PCCOE CTF Academy</span>
             <span className="breadcrumb-sep">/</span>
-            <span>Competitions & Events</span>
+            <span className="breadcrumb-active">Competitions & Events</span>
           </div>
-          <h2>OWASP PCCOE CTF Events</h2>
-          <p className="subtitle">
-            Timed jeopardy-style competitions, live scoreboards, and verified credentials for the OWASP PCCOE community.
+          <h1 className="page-title">Competitions</h1>
+          <p className="page-subtitle">
+            Timed CTF tournaments, campus hacker battles, and team cyber defense exercises.
           </p>
         </div>
       </div>
 
-      {certError && (
-        <div className="alert-banner error" style={{ marginBottom: 16 }}>
-          <FaLock /> {certError}
-        </div>
-      )}
-
       {loading ? (
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Syncing event countdown timers...</p>
+        <div className="table-skeleton-wrap">
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
         </div>
       ) : events.length === 0 ? (
-        <div className="empty-state">
-          <FaFlag className="empty-icon" />
-          <h3>No events yet</h3>
-          <p>Check back soon for upcoming competitions!</p>
+        <div className="card empty-card">
+          <FaCalendarAlt className="empty-icon" />
+          <h3>No events scheduled</h3>
+          <p>Upcoming competitions will appear here once announced by OWASP PCCOE coordinators.</p>
         </div>
       ) : (
-        <div className="events-layout">
-          {/* Left: Events List */}
+        <div className="events-split-layout">
+          {/* Left Column: Event List */}
           <div className="events-list-col">
-            {events.map(ev => (
-              <div
-                key={ev.id}
-                className={`event-card ${ev.id === selectedEventId ? "selected" : ""} ${ev.status}`}
-                onClick={() => {
-                  setSelectedEventId(ev.id);
-                  setCertError("");
-                }}
-              >
-                <div className="event-card-top">
-                  <span className={`status-badge ${ev.status}`}>
-                    {ev.status === "active" ? "🔴 LIVE NOW"
-                      : ev.status === "upcoming" ? "🔵 UPCOMING"
-                      : "⚫ ENDED"}
-                  </span>
-                  {ev.is_scoreboard_frozen && (
-                    <span className="frozen-pill" title="Scoreboard frozen!">
-                      <FaSnowflake /> FROZEN
-                    </span>
-                  )}
-                </div>
+            <h3 className="section-title">All Tournaments ({events.length})</h3>
 
-                <h3>{ev.name}</h3>
-                <p className="event-desc">{ev.description}</p>
+            <div className="event-cards-stack">
+              {events.map(ev => {
+                const isSelected = selectedEvent?.id === ev.id;
+                const statusClass = ev.status === "active" ? "live" : ev.status === "upcoming" ? "upcoming" : "concluded";
+                const statusLabel = ev.status === "active" ? "LIVE NOW" : ev.status === "upcoming" ? "UPCOMING" : "CONCLUDED";
 
-                <div className="event-meta-row">
-                  <span className="meta-time">
-                    <FaCalendarAlt /> {new Date(ev.start_date).toLocaleDateString()} → {new Date(ev.end_date).toLocaleDateString()}
-                  </span>
-                </div>
-
-                {/* Live Real-time Countdown */}
-                <EventCountdown event={ev} />
-
-                <div className="event-card-actions" onClick={e => e.stopPropagation()}>
-                  {ev.status !== "ended" ? (
-                    ev.is_registered ? (
-                      <div className="event-registered-actions">
-                        <span className="registered-badge" title={ev.registration_type === "team" ? `Registered with squad ${ev.team_name || ""}` : "Registered as Individual"}>
-                          <FaUserCheck /> {ev.registration_type === "team" ? `Squad: ${ev.team_name || "Team"}` : "Solo"}
-                        </span>
-                        {ev.registration_type !== "team" && (ev.participation_mode === "team" || ev.participation_mode === "both") && myTeam && (
-                          <button
-                            className="secondary-btn sm"
-                            onClick={() => setRegistrationChoice(ev)}
-                            title={`Switch to participating with ${myTeam.name}`}
-                          >
-                            Switch to Squad
-                          </button>
-                        )}
-                        {ev.status === "active" && ev.challenge_count > 0 && (
-                          <button className="primary-btn sm" onClick={() => onEnterArena?.(ev.id)}><FaFlag/> Enter Arena</button>
-                        )}
-                      </div>
-                    ) : (
-                      <button className="primary-btn sm" onClick={() => {
-                        if (ev.participation_mode === "team" || ev.participation_mode === "both") setRegistrationChoice(ev);
-                        else handleRegister(ev.id);
-                      }}>
-                        Register {ev.participation_mode === "team" ? "Squad" : ev.participation_mode === "both" ? "Event" : "Free"}
-                      </button>
-                    )
-                  ) : (
-                    <span className="registered-badge">Event Concluded</span>
-                  )}
-
-                  <button
-                    className={`secondary-btn sm ${ev.status !== "ended" ? "disabled-look" : ""}`}
-                    onClick={() => handleViewCertificate(ev)}
-                    title={ev.status !== "ended" ? "Available after event ends" : "Get your certificate"}
+                return (
+                  <div
+                    key={ev.id}
+                    className={`card event-list-item ${isSelected ? "selected-event" : ""}`}
+                    onClick={() => setSelectedEventId(ev.id)}
                   >
-                    <FaCertificate />
-                    {ev.status === "ended" ? " Get Certificate" : " Certificate (After Event)"}
-                  </button>
-                </div>
-              </div>
-            ))}
+                    <div className="event-list-top">
+                      <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
+                      <span className="event-date-sub">
+                        {new Date(ev.start_date).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <h4 className="event-card-title">{ev.name}</h4>
+                    <p className="event-card-desc">{ev.description}</p>
+
+                    <div className="event-card-meta-row">
+                      <span><FaUsers /> {ev.participants_count || 0} enrolled</span>
+                      <span><FaFlag /> {ev.challenge_count || 0} challenges</span>
+                    </div>
+
+                    {ev.is_registered && (
+                      <div className="registered-badge-pill">
+                        <FaCheckCircle /> Registered {ev.registration_type ? `(${ev.registration_type})` : ""}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Right: Event Arena & Scoreboard */}
-          <div className="event-details-col">
-            {eventLeaderboard && (
-              <div className="event-arena-card">
-                <div className="arena-header">
-                  <div>
-                    <span className="sub-tag">LIVE COMPETITION SCOREBOARD · {eventLeaderboard.participation_mode?.toUpperCase()}</span>
-                    <h3>{eventLeaderboard.event_name}</h3>
-                  </div>
-                  {eventLeaderboard.is_scoreboard_frozen && (
-                    <div className="frozen-banner">
-                      <FaSnowflake className="frozen-icon" />
-                      <div>
-                        <b>Scoreboard Frozen!</b>
-                        <small>Rankings locked during final hours. Flags can still be submitted!</small>
-                      </div>
-                    </div>
+          {/* Right Column: Active Tournament Control Panel (HTB style) */}
+          {selectedEvent && (
+            <div className="event-control-col">
+              <div className="card event-detail-panel">
+                <div className="panel-status-bar">
+                  <span className={`status-pill ${selectedEvent.status === "active" ? "live" : selectedEvent.status === "upcoming" ? "upcoming" : "concluded"}`}>
+                    {selectedEvent.status === "active" ? "● LIVE TOURNAMENT" : selectedEvent.status === "upcoming" ? "SCHEDULED EVENT" : "CONCLUDED"}
+                  </span>
+                  {selectedEvent.is_frozen && (
+                    <span className="freeze-tag">SCOREBOARD FROZEN</span>
                   )}
                 </div>
 
-                {/* If active event, show countdown in leaderboard panel too */}
-                {selectedEvent && selectedEvent.status !== "ended" && (
-                  <div className="panel-countdown">
-                    <EventCountdown event={selectedEvent} />
+                <h2 className="event-control-title">{selectedEvent.name}</h2>
+                <p className="event-control-desc">{selectedEvent.description}</p>
+
+                {/* Competition Timer */}
+                {selectedEvent.status !== "ended" && (
+                  <div className="countdown-box">
+                    <div className="countdown-head">
+                      <FaClock />
+                      <span>{selectedEvent.status === "upcoming" ? "Starts in:" : "Ends in:"}</span>
+                    </div>
+                    <span className="countdown-timer font-mono">
+                      {formatCountdown(countdownSecs)}
+                    </span>
                   </div>
                 )}
 
-                <div className="table-responsive">
-                  <table className="custom-table">
-                    <thead>
-                      <tr>
-                        <th>Rank</th>
-                        <th>Player / Squad</th>
-                        <th>Type</th>
-                        <th>Solves</th>
-                        <th>Points</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {!eventLeaderboard.leaderboard || eventLeaderboard.leaderboard.length === 0 ? (
+                {/* Event Key Stats Strip */}
+                <div className="event-stat-strip">
+                  <div className="event-stat-cell">
+                    <small>PARTICIPANTS</small>
+                    <b>{selectedEvent.participants_count || 0}</b>
+                  </div>
+                  <div className="event-stat-cell">
+                    <small>CHALLENGES</small>
+                    <b>{selectedEvent.challenge_count || 0}</b>
+                  </div>
+                  <div className="event-stat-cell">
+                    <small>FORMAT</small>
+                    <b>{selectedEvent.format || "Individual / Squad"}</b>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="event-actions-bar">
+                  {selectedEvent.status === "active" && selectedEvent.is_registered ? (
+                    <button
+                      className="btn-primary btn-block btn-lg"
+                      onClick={() => onEnterArena(selectedEvent.id)}
+                    >
+                      <FaPlay /> Enter Tournament Arena
+                    </button>
+                  ) : selectedEvent.status !== "ended" && !selectedEvent.is_registered ? (
+                    <button
+                      className="btn-primary btn-block"
+                      onClick={() => setRegistrationModal(selectedEvent)}
+                    >
+                      Register for Tournament
+                    </button>
+                  ) : selectedEvent.status === "ended" ? (
+                    <button
+                      className="btn-secondary btn-block"
+                      onClick={() => handleViewCertificate(selectedEvent)}
+                    >
+                      <FaCertificate /> View Official Certificate
+                    </button>
+                  ) : null}
+                </div>
+
+                {/* Live Tournament Leaderboard Preview */}
+                <div className="event-leaderboard-section">
+                  <div className="card-header-clean">
+                    <h3 className="card-title">Tournament Scoreboard</h3>
+                    <span className="card-desc">Live participant rankings</span>
+                  </div>
+
+                  <div className="table-responsive">
+                    <table className="clean-table">
+                      <thead>
                         <tr>
-                          <td colSpan={5} className="no-data">
-                            No submissions yet. Be the first to capture a flag!
-                          </td>
+                          <th style={{ width: "60px", textAlign: "center" }}>Rank</th>
+                          <th>Participant / Team</th>
+                          <th style={{ width: "100px", textAlign: "right" }}>Solves</th>
+                          <th style={{ width: "110px", textAlign: "right" }}>Score</th>
                         </tr>
-                      ) : (
-                        eventLeaderboard.leaderboard.map(row => (
-                          <tr key={row.user_id}>
-                            <td className="rank-cell">
-                              {row.rank === 1 ? <FaTrophy className="gold" />
-                               : row.rank === 2 ? <FaTrophy className="silver" />
-                               : row.rank === 3 ? <FaTrophy className="bronze" />
-                               : `#${row.rank}`}
+                      </thead>
+                      <tbody>
+                        {!eventLeaderboard?.leaderboard || eventLeaderboard.leaderboard.length === 0 ? (
+                          <tr>
+                            <td colSpan="4" className="table-empty">
+                              No solves recorded for this competition yet.
                             </td>
-                            <td><b>{row.name}</b>{row.type === "team" && row.members?.length > 0 && <small style={{display:"block",opacity:.65}}>{row.members.join(" · ")}</small>}</td>
-                            <td>{row.type === "team" ? "TEAM" : "INDIVIDUAL"}</td>
-                            <td><span className="solve-chip"><FaCheckCircle /> {row.solves}</span></td>
-                            <td><b className="points-text">{row.points} PTS</b></td>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                        ) : (
+                          eventLeaderboard.leaderboard.slice(0, 10).map((row, idx) => (
+                            <tr key={row.user_id || row.team_id || idx}>
+                              <td style={{ textAlign: "center" }} className="mono-stat">
+                                #{idx + 1}
+                              </td>
+                              <td>
+                                <b>{row.name}</b>
+                                {row.team_name && <small className="meta-muted"> [{row.team_name}]</small>}
+                              </td>
+                              <td style={{ textAlign: "right" }} className="mono-solves">
+                                {row.solves_count || 0}
+                              </td>
+                              <td style={{ textAlign: "right" }} className="mono-points">
+                                {row.points} pts
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
-      {registrationChoice && (
-        <div className="modal-backdrop" onClick={() => setRegistrationChoice(null)}>
-          <div className="table-card" style={{ maxWidth: 480, width: "92%" }} onClick={e => e.stopPropagation()}>
-            <h3>Tournament Participation</h3>
-            <p className="subtitle" style={{ marginBottom: "16px" }}>
-              Event: <b>{registrationChoice.name}</b><br />
-              Mode: <span style={{ textTransform: "uppercase", color: "#38bdf8", fontWeight: "bold" }}>{registrationChoice.participation_mode}</span>
+      {/* Registration Modal */}
+      {registrationModal && (
+        <div className="modal-backdrop" onClick={() => setRegistrationModal(null)}>
+          <div className="clean-modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header-simple">
+              <h3>Tournament Registration</h3>
+              <button className="modal-close-icon-btn" onClick={() => setRegistrationModal(null)}>
+                <FaTimes />
+              </button>
+            </div>
+
+            <p className="modal-lead-text">
+              Choose how you want to compete in <b>{registrationModal.name}</b>:
             </p>
-            {registrationChoice.participation_mode === "both" && (
-              <button
-                className="secondary-btn"
-                style={{ marginBottom: "12px", width: "100%", justifyContent: "center" }}
-                onClick={() => handleRegister(registrationChoice.id)}
-              >
-                Compete Solo (Individual)
+
+            <div className="reg-choice-options">
+              <label className={`reg-option-card ${selectedRegType === "solo" ? "selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="regType"
+                  value="solo"
+                  checked={selectedRegType === "solo"}
+                  onChange={() => setSelectedRegType("solo")}
+                />
+                <div>
+                  <b>Individual Participant (Solo)</b>
+                  <p>Compete under your own name and earn individual points.</p>
+                </div>
+              </label>
+
+              {myTeam && (
+                <label className={`reg-option-card ${selectedRegType === "team" ? "selected" : ""}`}>
+                  <input
+                    type="radio"
+                    name="regType"
+                    value="team"
+                    checked={selectedRegType === "team"}
+                    onChange={() => setSelectedRegType("team")}
+                  />
+                  <div>
+                    <b>Squad: {myTeam.name}</b>
+                    <p>Compete together with your squad and contribute to the team scoreboard.</p>
+                  </div>
+                </label>
+              )}
+            </div>
+
+            <div className="modal-actions-row">
+              <button className="btn-secondary btn-sm" onClick={() => setRegistrationModal(null)}>
+                Cancel
               </button>
-            )}
-            {myTeam ? (
               <button
-                className="primary-btn"
-                style={{ width: "100%", justifyContent: "center" }}
-                onClick={() => handleRegister(registrationChoice.id, myTeam.id)}
+                className="btn-primary btn-sm"
+                onClick={() => handleRegister(registrationModal.id, selectedRegType === "team" ? myTeam?.id : null)}
               >
-                Compete with Squad: <b>{myTeam.name}</b>
+                Confirm Registration
               </button>
-            ) : (
-              <div style={{ padding: "12px 16px", background: "rgba(255,255,255,0.04)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", marginBottom: "12px" }}>
-                <p style={{ margin: "0 0 4px 0", fontWeight: 600 }}>Not in a squad yet?</p>
-                <small style={{ color: "#94a3b8", display: "block" }}>
-                  Visit the <b>Squads Hub</b> to create a new squad or send a join request to an existing one.
-                </small>
-              </div>
-            )}
-            <button className="back-link" style={{ marginTop: "12px", display: "block", textAlign: "center", width: "100%" }} onClick={() => setRegistrationChoice(null)}>
-              Cancel
-            </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Certificate Modal */}
-      {activeCert && (
-        <div className="modal-backdrop" onClick={() => setActiveCert(null)}>
-          <div className="certificate-modal" onClick={e => e.stopPropagation()}>
-            <button className="close-btn" onClick={() => setActiveCert(null)}><FaTimes /></button>
+      {/* Certificate Viewer Modal */}
+      {(activeCert || certLoading || certError) && (
+        <div className="modal-backdrop" onClick={() => { setActiveCert(null); setCertError(""); }}>
+          <div className="clean-modal-content cert-view-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header-simple">
+              <h3>Official Event Certificate</h3>
+              <button className="modal-close-icon-btn" onClick={() => { setActiveCert(null); setCertError(""); }}>
+                <FaTimes />
+              </button>
+            </div>
 
-            <div className="cert-frame" id="printable-cert">
-              <div className="cert-border">
-                <div className="cert-inner">
-                  <div className="cert-header">
-                    <FaShieldAlt className="cert-logo" />
-                    <h2>COLLEGE OWASP CHAPTER</h2>
-                    <p className="cert-subtitle">Certificate of CTF Participation & Excellence</p>
-                  </div>
-                  <div className="cert-body">
-                    <p className="cert-awarded-text">This is proudly presented to</p>
-                    <h1 className="cert-student-name">{activeCert.student_name}</h1>
-                    <p className="cert-college">{activeCert.college}</p>
-                    <p className="cert-details-text">
-                      For successfully competing in <b>{activeCert.event_name}</b>, scoring{" "}
-                      <b>{activeCert.score} points</b> across <b>{activeCert.solves} captured flags</b>.
-                    </p>
-                  </div>
-                  <div className="cert-footer">
-                    <div className="cert-sign">
-                      <div className="sign-line"></div>
-                      <span>{activeCert.signature}</span>
-                    </div>
-                    <div className="cert-meta">
-                      <span>Date: {activeCert.issued_date}</span>
-                      <small>ID: {activeCert.certificate_id}</small>
-                    </div>
-                  </div>
+            {certLoading && <div className="spinner" />}
+            {certError && <div className="alert-banner error">{certError}</div>}
+
+            {activeCert && (
+              <div className="cert-preview-box">
+                <div className="cert-badge-ribbon">
+                  <FaCertificate /> VERIFIED ISSUANCE
                 </div>
+                <h4>{activeCert.event_name || "Certificate of Achievement"}</h4>
+                <p>Awarded to <b>{activeCert.recipient_name || activeCert.student_name || activeCert.participant_name}</b></p>
+                <div className="cert-meta-info font-mono">
+                  <span>Serial: {activeCert.certificate_id || activeCert.id}</span>
+                  <span>Issued: {activeCert.issued_date || (activeCert.issued_at ? activeCert.issued_at.split("T")[0] : "—")}</span>
+                  {activeCert.score != null && <span>Score: {activeCert.score} pts · {activeCert.solves} solves</span>}
+                  {activeCert.rank && <span>Rank: #{activeCert.rank}</span>}
+                </div>
+                {activeCert.download_url ? (
+                  <a
+                    href={activeCert.download_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-primary btn-block btn-sm"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 14, textDecoration: "none" }}
+                  >
+                    <FaCertificate /> Download Certificate (PDF)
+                  </a>
+                ) : (
+                  <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 12 }}>
+                    PDF is being generated — check back shortly or contact the admin.
+                  </p>
+                )}
               </div>
-            </div>
-
-            <div className="cert-modal-actions">
-              <button className="primary-btn" onClick={async () => {
-                try {
-                  const r = await api.get(`/certificates/${activeCert.certificate_id}/download`, { responseType: "blob" });
-                  const url = URL.createObjectURL(r.data); const a = document.createElement("a");
-                  a.href = url; a.download = `${activeCert.certificate_id}.pdf`; a.click(); URL.revokeObjectURL(url);
-                } catch (e) { setCertError(e.response?.data?.detail || "Download failed"); }
-              }}>
-                <FaDownload /> Download PDF
-              </button>
-              <button className="secondary-btn" onClick={() => window.print()}>
-                <FaPrint /> Print
-              </button>
-              <a
-                className="secondary-btn"
-                href={
-                  activeCert.verification_url?.startsWith("http")
-                    ? activeCert.verification_url
-                    : `${api.defaults.baseURL || "http://localhost:8000"}${activeCert.verification_url?.startsWith("/") ? "" : "/"}${activeCert.verification_url || `verify/certificate/${activeCert.certificate_id}/page`}`
-                }
-                target="_blank"
-                rel="noreferrer"
-              >
-                <FaExternalLinkAlt /> Verify Certificate
-              </a>
-            </div>
+            )}
           </div>
         </div>
       )}

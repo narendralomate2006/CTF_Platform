@@ -31,7 +31,8 @@ import {
   FaUndo,
   FaEnvelope,
   FaSlidersH,
-  FaMousePointer
+  FaMousePointer,
+  FaDownload
 } from "react-icons/fa";
 
 const CATEGORIES = [
@@ -146,7 +147,11 @@ export default function Admin() {
     runtime_image: "",
     runtime_port: "",
     runtime_protocol: "http",
-    instance_timeout_minutes: 60
+    instance_timeout_minutes: 60,
+    scoring_mode: "static",
+    initial_points: 100,
+    min_points: 50,
+    decay_limit: 20
   });
 
   // Events data
@@ -513,7 +518,11 @@ export default function Admin() {
         runtime_image: challForm.runtime_image || null,
         runtime_port: challForm.runtime_port ? Number(challForm.runtime_port) : null,
         runtime_protocol: challForm.runtime_protocol || "http",
-        instance_timeout_minutes: Number(challForm.instance_timeout_minutes || 60)
+        instance_timeout_minutes: Number(challForm.instance_timeout_minutes || 60),
+        scoring_mode: challForm.scoring_mode || "static",
+        initial_points: Number(challForm.initial_points || challForm.points || 100),
+        min_points: Number(challForm.min_points || 50),
+        decay_limit: Number(challForm.decay_limit || 20)
       };
 
       if (editingChall) {
@@ -544,7 +553,11 @@ export default function Admin() {
         runtime_image: "",
         runtime_port: "",
         runtime_protocol: "http",
-        instance_timeout_minutes: 60
+        instance_timeout_minutes: 60,
+        scoring_mode: "static",
+        initial_points: 100,
+        min_points: 50,
+        decay_limit: 20
       });
       loadChallenges();
     } catch (err) {
@@ -1034,10 +1047,10 @@ export default function Admin() {
               </div>
 
               {/* Category Solves Table */}
-              <div className="table-card">
+              <div className="card table-card">
                 <h3>Category Engagement Breakdown</h3>
                 <div className="table-responsive">
-                  <table className="custom-table">
+                  <table className="clean-table custom-table">
                     <thead>
                       <tr>
                         <th>Security Domain</th>
@@ -1059,10 +1072,10 @@ export default function Admin() {
               </div>
 
               {/* Challenge Solve Rates */}
-              <div className="table-card">
+              <div className="card table-card">
                 <h3>Challenge Difficulty Tuning & Solve Rates</h3>
                 <div className="table-responsive">
-                  <table className="custom-table">
+                  <table className="clean-table custom-table">
                     <thead>
                       <tr>
                         <th>Challenge</th>
@@ -1097,10 +1110,10 @@ export default function Admin() {
               </div>
 
               {/* Recent Submissions Log */}
-              <div className="table-card">
+              <div className="card table-card">
                 <h3>Live Submission Activity Logs</h3>
                 <div className="table-responsive">
-                  <table className="custom-table">
+                  <table className="clean-table custom-table">
                     <thead>
                       <tr>
                         <th>Time</th>
@@ -1214,6 +1227,42 @@ export default function Admin() {
                     <option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Scoring Method:</label>
+                  <select
+                    value={challForm.scoring_mode || "static"}
+                    onChange={e => setChallForm({ ...challForm, scoring_mode: e.target.value })}
+                  >
+                    <option value="static">Static (Constant Points)</option>
+                    <option value="decaying">Decaying Points (Dynamic CTF Decay)</option>
+                  </select>
+                </div>
+                {challForm.scoring_mode === "decaying" && (
+                  <>
+                    <div className="form-group">
+                      <label>Floor / Min Points:</label>
+                      <input
+                        type="number"
+                        min="5"
+                        value={challForm.min_points || 50}
+                        onChange={e => setChallForm({ ...challForm, min_points: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Decay Solve Threshold:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={challForm.decay_limit || 20}
+                        onChange={e => setChallForm({ ...challForm, decay_limit: Number(e.target.value) })}
+                        placeholder="Solves to floor"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               {challForm.flag_mode !== "static" && (
@@ -1338,7 +1387,11 @@ export default function Admin() {
                         runtime_image: "",
                         runtime_port: "",
                         runtime_protocol: "http",
-                        instance_timeout_minutes: 60
+                        instance_timeout_minutes: 60,
+                        scoring_mode: "static",
+                        initial_points: 100,
+                        min_points: 50,
+                        decay_limit: 20
                       });
                     }}
                   >
@@ -1363,10 +1416,10 @@ export default function Admin() {
           )}
 
           {/* Challenges List Table */}
-          <div className="table-card">
+          <div className="card table-card">
             <h3>Existing Challenges ({challenges.length})</h3>
             <div className="table-responsive">
-              <table className="custom-table">
+              <table className="clean-table custom-table">
                 <thead>
                   <tr>
                     <th>Title</th>
@@ -1384,7 +1437,10 @@ export default function Admin() {
                       <td><b>{c.title}</b></td>
                       <td><span className="category-tag">{c.category}</span></td>
                       <td>{c.points}</td>
-                      <td><span className="category-tag">{c.flag_mode || "static"}</span></td>
+                      <td>
+                        <span className="category-tag">{c.flag_mode || "static"}</span>
+                        {c.scoring_mode === "decaying" && <small style={{ marginLeft: "4px", color: "var(--brand-green)", fontWeight: 700 }}>⚡Decay</small>}
+                      </td>
                       <td><span className={`status-badge ${c.status || "published"}`}>{(c.status || "published").toUpperCase()}</span></td>
                       <td>{c.solves_count}</td>
                       <td>
@@ -1416,7 +1472,11 @@ export default function Admin() {
                                 runtime_image: c.runtime_image || "",
                                 runtime_port: c.runtime_port || "",
                                 runtime_protocol: c.runtime_protocol || "http",
-                                instance_timeout_minutes: c.instance_timeout_minutes || 60
+                                instance_timeout_minutes: c.instance_timeout_minutes || 60,
+                                scoring_mode: c.scoring_mode || "static",
+                                initial_points: c.initial_points || c.points,
+                                min_points: c.min_points || 50,
+                                decay_limit: c.decay_limit || 20
                               });
                             }}
                             title="Edit"
@@ -1514,10 +1574,10 @@ export default function Admin() {
           </div>
 
           {/* Events List & Freeze Control */}
-          <div className="table-card">
+          <div className="card table-card">
             <h3>Active & Scheduled Events</h3>
             <div className="table-responsive">
-              <table className="custom-table">
+              <table className="clean-table custom-table">
                 <thead>
                   <tr>
                     <th>Event</th>
@@ -1547,7 +1607,16 @@ export default function Admin() {
                         </button>
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: 6 }}>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <a
+                            href={`${API_URL}/admin/events/${ev.id}/export`}
+                            className="icon-action-btn"
+                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                            title="Export Results & Standings (CSV)"
+                            download
+                          >
+                            <FaDownload />
+                          </a>
                           <button
                             className="icon-action-btn edit"
                             onClick={() => startEditEvent(ev)}
@@ -1577,7 +1646,7 @@ export default function Admin() {
       {tab === "live" && (
         <div className="admin-section">
           <div className="section-header"><div><h2>Live Challenge Instances</h2><p className="subtitle">Monitor isolated Docker challenge containers and stop running instances when necessary.</p></div><button className="secondary-btn" onClick={loadLiveInstances}><FaSyncAlt/> Refresh</button></div>
-          <div className="table-card"><div className="table-responsive"><table className="custom-table"><thead><tr><th>Challenge</th><th>Student</th><th>Status</th><th>Endpoint</th><th>Expires</th><th>Action</th></tr></thead><tbody>{liveInstances.map(i=><tr key={i.id}><td><b>{i.challenge_title}</b></td><td>{i.user_name}</td><td><span className={`status-badge ${i.status}`}>{i.status.toUpperCase()}</span></td><td><code>{i.connection_url || "—"}</code></td><td>{i.expires_at ? new Date(i.expires_at).toLocaleString() : "—"}</td><td>{["running","starting"].includes(i.status)&&<button className="icon-action-btn delete" title="Stop instance" onClick={()=>stopLiveInstance(i.id)}><FaStop/></button>}</td></tr>)}{!liveInstances.length&&<tr><td colSpan="6">{liveLoading?"Loading instances…":"No live instances."}</td></tr>}</tbody></table></div></div>
+          <div className="card table-card"><div className="table-responsive"><table className="clean-table custom-table"><thead><tr><th>Challenge</th><th>Student</th><th>Status</th><th>Endpoint</th><th>Expires</th><th>Action</th></tr></thead><tbody>{liveInstances.map(i=><tr key={i.id}><td><b>{i.challenge_title}</b></td><td>{i.user_name}</td><td><span className={`status-badge ${i.status}`}>{i.status.toUpperCase()}</span></td><td><code>{i.connection_url || "—"}</code></td><td>{i.expires_at ? new Date(i.expires_at).toLocaleString() : "—"}</td><td>{["running","starting"].includes(i.status)&&<button className="icon-action-btn delete" title="Stop instance" onClick={()=>stopLiveInstance(i.id)}><FaStop/></button>}</td></tr>)}{!liveInstances.length&&<tr><td colSpan="6">{liveLoading?"Loading instances…":"No live instances."}</td></tr>}</tbody></table></div></div>
         </div>
       )}
 
@@ -3159,7 +3228,7 @@ export default function Admin() {
                 <p>Loading certificates...</p>
               ) : (
                 <div className="table-responsive" style={{ marginTop: "10px" }}>
-                  <table className="custom-table">
+                  <table className="clean-table custom-table">
                     <thead>
                       <tr>
                         <th>ID</th>
@@ -3287,7 +3356,7 @@ export default function Admin() {
               <div className="stat-card"><span>Live instances</span><strong>{monitoring.live_instances}</strong></div>
               <div className="stat-card"><span>Open alerts</span><strong>{monitoring.open_security_alerts}</strong></div>
             </div>
-            <div className="table-card" style={{marginTop:"16px"}}><h3>Recent API requests</h3><div className="table-responsive"><table className="custom-table"><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>Duration</th><th>Request ID</th></tr></thead><tbody>
+            <div className="card table-card" style={{marginTop:"16px"}}><h3>Recent API requests</h3><div className="table-responsive"><table className="clean-table custom-table"><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>Duration</th><th>Request ID</th></tr></thead><tbody>
               {(monitoring.runtime?.recent_requests || []).slice().reverse().map((r, i) => <tr key={i}><td>{new Date(r.timestamp).toLocaleString()}</td><td><b>{r.method}</b></td><td><code>{r.path}</code></td><td><span className="status-pill">{r.status}</span></td><td>{r.duration_ms} ms</td><td><code>{r.request_id}</code></td></tr>)}
               {!monitoring.runtime?.recent_requests?.length && <tr><td colSpan="6" className="no-data">No requests recorded yet.</td></tr>}
             </tbody></table></div></div>
@@ -3322,10 +3391,10 @@ export default function Admin() {
                 <div className="metric-box"><span className="metric-title">Suspicious / 24h</span><b className="metric-num">{securityOverview?.suspicious_submissions_24h ?? 0}</b></div>
               </div>
 
-              <div className="table-card">
+              <div className="card table-card">
                 <div className="card-header-row"><h3>Security Alerts</h3><span className="status-pill">Human review required</span></div>
                 <div className="table-responsive">
-                  <table className="custom-table">
+                  <table className="clean-table custom-table">
                     <thead><tr><th>Severity</th><th>Time</th><th>Student / Squad</th><th>Challenge</th><th>Detection</th><th>Risk</th><th>Action</th></tr></thead>
                     <tbody>
                       {securityAlerts.length ? securityAlerts.map(a => (
@@ -3355,7 +3424,7 @@ export default function Admin() {
 
       {/* TAB 6: USER CONTROLS */}
       {tab === "users" && (
-        <div className="table-card">
+        <div className="card table-card">
           <div className="card-header-row">
             <h3>Registered Participants & Club Roles</h3>
             <input
@@ -3368,7 +3437,7 @@ export default function Admin() {
           </div>
 
           <div className="table-responsive">
-            <table className="custom-table">
+            <table className="clean-table custom-table">
               <thead>
                 <tr>
                   <th>Student</th>
