@@ -2320,25 +2320,72 @@ a:hover {
   color: var(--text-muted);
 }
 
-.hint-locked-action p {
-  margin-bottom: 10px;
-}
-
-.hint-card-locked {
+.hint-card-locked,
+.hint-card-locked-inner {
   text-align: center;
-  padding: 24px 16px;
+  padding: 24px 18px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px dashed rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-.lock-icon-subtle {
-  font-size: 24px;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-
-.hint-card-locked h5 {
-  font-size: 14px;
-  font-weight: 700;
+.hint-lock-icon-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
   margin-bottom: 4px;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.2);
+}
+
+.hint-card-locked h5,
+.hint-card-locked-inner h5 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.hint-card-locked p,
+.hint-card-locked-inner p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 420px;
+  line-height: 1.5;
+  margin: 0 0 6px 0;
+}
+
+.hint-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.hint-status-tag.unlocked {
+  background: rgba(46, 160, 67, 0.15);
+  color: #2ea043;
+  border: 1px solid rgba(46, 160, 67, 0.3);
+}
+
+.hint-unlocked-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* Writeup Pane */

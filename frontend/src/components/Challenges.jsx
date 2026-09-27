@@ -610,8 +610,12 @@ export default function Challenges({ currentUser, onUserUpdated }) {
                 className={`problem-tab-btn ${modalTab === "hints" ? "active" : ""}`}
                 onClick={() => setModalTab("hints")}
               >
-                <FaLightbulb /> Hints
-                {activeModalChall.hint_unlocked && <span className="tab-pill-unlocked">Unlocked</span>}
+                <FaLightbulb /> Hints{" "}
+                {(advancedHints.length > 0 ? advancedHints.some(h => h.unlocked) : activeModalChall.hint_unlocked) ? (
+                  <span className="tab-pill-unlocked">Unlocked</span>
+                ) : (
+                  <FaLock className="tab-lock-icon" />
+                )}
               </button>
               <button
                 className={`problem-tab-btn ${modalTab === "writeup" ? "active" : ""}`}
@@ -780,32 +784,56 @@ export default function Challenges({ currentUser, onUserUpdated }) {
                         <div className="hint-card" key={h.id}>
                           <div className="hint-card-head">
                             <span className="hint-num"><FaLightbulb /> Hint #{h.order_index}</span>
-                            <span className="hint-cost">{h.cost} pts</span>
+                            <span className="hint-cost">{h.cost || activeModalChall.hint_cost || 15} pts</span>
                           </div>
                           {h.unlocked ? (
-                            <p className="hint-content">{h.content}</p>
+                            <div className="hint-unlocked-body">
+                              <div className="hint-status-tag unlocked">
+                                <FaUnlock /> Unlocked
+                              </div>
+                              <p className="hint-content">{h.content}</p>
+                            </div>
                           ) : (
-                            <div className="hint-locked-action">
-                              <p>This hint requires a deduction of <b>{h.cost} points</b> from your score.</p>
+                            <div className="hint-card-locked-inner">
+                              <div className="hint-lock-icon-circle">
+                                <FaLock />
+                              </div>
+                              <h5>Hint #{h.order_index} is Locked</h5>
+                              <p>
+                                Unlocking this hint will deduct <b>{h.cost || activeModalChall.hint_cost || 15} points</b> from your total score.
+                              </p>
                               <button
-                                className="btn-secondary btn-sm"
+                                className="primary-btn btn-sm"
                                 disabled={hintBusy === h.id}
                                 onClick={async () => {
-                                  if (!window.confirm(`Unlock this hint for ${h.cost} points?`)) return;
+                                  const cost = h.cost || activeModalChall.hint_cost || 15;
+                                  if (!window.confirm(`Unlock Hint #${h.order_index}?\n\nThis will deduct ${cost} points from your score.`)) return;
                                   setHintBusy(h.id);
                                   try {
-                                    await api.post(`/challenges/${activeModalChall.id}/hints/${h.id}/unlock`);
+                                    const res = await api.post(`/challenges/${activeModalChall.id}/hints/${h.id}/unlock`);
                                     const r = await api.get(`/challenges/${activeModalChall.id}/hints`);
                                     setAdvancedHints(r.data.hints || []);
+                                    setActiveModalChall(prev => ({
+                                      ...prev,
+                                      hint_unlocked: true,
+                                      hint: res.data.hint || prev.hint
+                                    }));
+                                    setSubmitResult({
+                                      type: "info",
+                                      text: res.data.message || `Hint unlocked! -${cost} points deducted.`
+                                    });
                                     if (onUserUpdated) onUserUpdated();
                                   } catch (err) {
-                                    setSubmitResult({ type: "error", text: err.response?.data?.detail || "Failed to unlock hint" });
+                                    setSubmitResult({
+                                      type: "error",
+                                      text: err.response?.data?.detail || "Failed to unlock hint"
+                                    });
                                   } finally {
                                     setHintBusy(null);
                                   }
                                 }}
                               >
-                                <FaUnlock /> {hintBusy === h.id ? "Unlocking..." : `Unlock Hint (-${h.cost} pts)`}
+                                <FaUnlock /> {hintBusy === h.id ? "Unlocking..." : `Unlock Hint (-${h.cost || activeModalChall.hint_cost || 15} pts)`}
                               </button>
                             </div>
                           )}
@@ -816,15 +844,20 @@ export default function Challenges({ currentUser, onUserUpdated }) {
                         <div className="hint-card">
                           <div className="hint-card-head">
                             <span className="hint-num"><FaLightbulb /> Challenge Hint</span>
+                            <span className="hint-status-tag unlocked"><FaUnlock /> Unlocked</span>
                           </div>
                           <p className="hint-content">{activeModalChall.hint}</p>
                         </div>
                       ) : (
                         <div className="hint-card hint-card-locked">
-                          <FaLock className="lock-icon-subtle" />
-                          <h5>Need a hint to make progress?</h5>
-                          <p>Unlocking this hint will deduct <b>{activeModalChall.hint_cost || 15} points</b> from your total score.</p>
-                          <button className="btn-secondary btn-sm" onClick={handleUnlockHint}>
+                          <div className="hint-lock-icon-circle">
+                            <FaLock />
+                          </div>
+                          <h5>Challenge Hint is Locked</h5>
+                          <p>
+                            Unlocking this hint will deduct <b>{activeModalChall.hint_cost || 15} points</b> from your total score.
+                          </p>
+                          <button className="primary-btn btn-sm" onClick={handleUnlockHint}>
                             <FaUnlock /> Unlock Hint (-{activeModalChall.hint_cost || 15} pts)
                           </button>
                         </div>

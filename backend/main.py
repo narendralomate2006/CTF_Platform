@@ -1615,7 +1615,7 @@ def get_challenges(
     result = []
     for c in challenges:
         is_solved = c.id in solved_set
-        hint_unlocked = (c.id in unlocked_hints_set) or (current_user and current_user.role == "admin")
+        hint_unlocked = (c.id in unlocked_hints_set)
         st = stats_map.get(c.id, {"total": 0, "correct": 0})
         total_attempts = st["total"]
         solves = c.solves_count if c.solves_count is not None else st["correct"]
@@ -1676,7 +1676,7 @@ def get_challenge(
             Submission.is_correct == True
         ).first() is not None
 
-        hint_unlocked = (current_user.role == "admin") or db.query(HintUnlock).filter(
+        hint_unlocked = db.query(HintUnlock).filter(
             HintUnlock.user_id == current_user.id,
             HintUnlock.challenge_id == challenge.id
         ).first() is not None
@@ -1747,11 +1747,33 @@ def get_challenge_hints(challenge_id: int, db: Session = Depends(get_db), curren
     hints = db.query(ChallengeHint).filter(ChallengeHint.challenge_id == challenge_id).order_by(ChallengeHint.order_index.asc()).all()
     # Backward compatibility: expose the legacy single hint as hint #1 if no advanced hints exist.
     if not hints and challenge.hint:
-        return {"success": True, "hints": [{"id": 0, "title": "Hint", "cost": challenge.hint_cost or 15, "order_index": 1, "unlocked": (current_user is not None and (current_user.role in ["admin", "moderator"] or db.query(HintUnlock).filter(HintUnlock.user_id == current_user.id, HintUnlock.challenge_id == challenge_id).first() is not None)), "content": challenge.hint if current_user and (current_user.role in ["admin", "moderator"] or db.query(HintUnlock).filter(HintUnlock.user_id == current_user.id, HintUnlock.challenge_id == challenge_id).first() is not None) else None}]}
+        is_unlocked = (current_user is not None and db.query(HintUnlock).filter(
+            HintUnlock.user_id == current_user.id,
+            HintUnlock.challenge_id == challenge_id
+        ).first() is not None)
+        return {"success": True, "hints": [{
+            "id": 0,
+            "title": "Hint",
+            "cost": challenge.hint_cost or 15,
+            "order_index": 1,
+            "unlocked": is_unlocked,
+            "content": challenge.hint if is_unlocked else None
+        }]}
     unlocked = set()
     if current_user:
-        unlocked = {h.hint_id for h in db.query(HintUnlock).filter(HintUnlock.user_id == current_user.id, HintUnlock.challenge_id == challenge_id, HintUnlock.hint_id.isnot(None)).all()}
-    return {"success": True, "hints": [{"id": h.id, "title": h.title, "cost": h.cost, "order_index": h.order_index, "unlocked": current_user is not None and (current_user.role in ["admin", "moderator"] or h.id in unlocked), "content": h.content if current_user and (current_user.role in ["admin", "moderator"] or h.id in unlocked) else None} for h in hints]}
+        unlocked = {h.hint_id for h in db.query(HintUnlock).filter(
+            HintUnlock.user_id == current_user.id,
+            HintUnlock.challenge_id == challenge_id,
+            HintUnlock.hint_id.isnot(None)
+        ).all()}
+    return {"success": True, "hints": [{
+        "id": h.id,
+        "title": h.title,
+        "cost": h.cost,
+        "order_index": h.order_index,
+        "unlocked": (h.id in unlocked),
+        "content": h.content if (h.id in unlocked) else None
+    } for h in hints]}
 
 
 @app.post("/challenges/{challenge_id}/hints/{hint_id}/unlock")
@@ -1766,12 +1788,10 @@ def unlock_specific_hint(challenge_id: int, hint_id: int, db: Session = Depends(
         if existing:
             return {"success": True, "message": "Hint already unlocked", "hint": challenge.hint, "cost_deducted": 0, "remaining_points": current_user.points}
         cost = max(0, challenge.hint_cost or 15)
-        if current_user.points < cost:
-            raise HTTPException(status_code=400, detail=f"You need {cost} points to unlock this hint")
         current_user.points -= cost
         db.add(HintUnlock(user_id=current_user.id, challenge_id=challenge_id, hint_id=None, cost_deducted=cost))
         db.commit()
-        return {"success": True, "message": "Hint unlocked", "hint": challenge.hint, "cost_deducted": cost, "remaining_points": current_user.points}
+        return {"success": True, "message": f"Hint unlocked! {cost} points deducted.", "hint": challenge.hint, "cost_deducted": cost, "remaining_points": current_user.points}
     hint = db.query(ChallengeHint).filter(ChallengeHint.id == hint_id, ChallengeHint.challenge_id == challenge_id).first()
     if not hint:
         raise HTTPException(status_code=404, detail="Challenge or hint not found")
@@ -1779,12 +1799,10 @@ def unlock_specific_hint(challenge_id: int, hint_id: int, db: Session = Depends(
     if existing:
         return {"success": True, "message": "Hint already unlocked", "hint": hint.content, "cost_deducted": 0, "remaining_points": current_user.points}
     cost = max(0, hint.cost)
-    if current_user.points < cost:
-        raise HTTPException(status_code=400, detail=f"You need {cost} points to unlock this hint")
     current_user.points -= cost
     db.add(HintUnlock(user_id=current_user.id, challenge_id=challenge_id, hint_id=hint_id, cost_deducted=cost))
     db.commit()
-    return {"success": True, "message": "Hint unlocked", "hint": hint.content, "cost_deducted": cost, "remaining_points": current_user.points}
+    return {"success": True, "message": f"Hint unlocked! {cost} points deducted.", "hint": hint.content, "cost_deducted": cost, "remaining_points": current_user.points}
 
 
 @app.post("/challenges/{challenge_id}/unlock-hint")
@@ -1820,8 +1838,8 @@ def unlock_hint(
         }
 
     # Deduct cost from user points
-    cost = challenge.hint_cost or 15
-    current_user.points = max(0, current_user.points - cost)
+    cost = max(0, challenge.hint_cost or 15)
+    current_user.points -= cost
 
     unlock = HintUnlock(
         user_id=current_user.id,
