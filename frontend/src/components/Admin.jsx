@@ -194,7 +194,7 @@ export default function Admin() {
     body_font_size: 12,
     primary_color: "#1e293b",
     accent_color: "#0284c7",
-    header_text: "COLLEGE OWASP STUDENT CHAPTER",
+    header_text: "OWASP PCCOE STUDENT CHAPTER",
     title_text: "Certificate of CTF Participation & Achievement",
     subtitle_text: "This certificate is proudly presented to",
     custom_body_text: "for participating in {event_name} and capturing {solves} flag(s) for {score} points.",
@@ -938,9 +938,14 @@ export default function Admin() {
       {/* Header */}
       <div className="section-header">
         <div>
-          <h2>Club Admin Command Center</h2>
+          <div className="platform-breadcrumb">
+            <span>OWASP PCCOE</span>
+            <span className="breadcrumb-sep">/</span>
+            <span>Admin</span>
+          </div>
+          <h2>OWASP PCCOE Command Center</h2>
           <p className="subtitle">
-            Manage challenges, live events, participant access, and evaluate competition analytics.
+            Manage challenges, live events, participant access, and evaluate competition analytics for OWASP PCCOE CTF Academy.
           </p>
         </div>
       </div>
@@ -2183,7 +2188,7 @@ export default function Admin() {
                     type="text"
                     value={certConfig.header_text || ""}
                     onChange={e => setCertConfig({ ...certConfig, header_text: e.target.value })}
-                    placeholder="COLLEGE OWASP STUDENT CHAPTER"
+                    placeholder="OWASP PCCOE STUDENT CHAPTER"
                     style={{ fontSize: "12px" }}
                   />
                 </div>
@@ -2681,7 +2686,7 @@ export default function Admin() {
                           letterSpacing: "2px",
                           textTransform: "uppercase"
                         }}>
-                          {certConfig.header_text || "COLLEGE OWASP STUDENT CHAPTER"}
+                          {certConfig.header_text || "OWASP PCCOE STUDENT CHAPTER"}
                         </span>
                       </div>
                     )}

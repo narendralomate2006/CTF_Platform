@@ -39,10 +39,14 @@ export default function Navbar({
       </button>
 
       <div className="brand" onClick={() => (onNavigateHome ? onNavigateHome() : onOpenProfile(null))} style={{ cursor: "pointer" }}>
-        <FaShieldAlt className="brand-icon" />
+        <img
+          src="/branding/owasp-pccoe-logo.png"
+          alt="OWASP PCCOE Logo"
+          className="brand-logo-img"
+        />
         <div className="brand-text">
-          <b>OWASP <span>CTF</span></b>
-          <span className="brand-badge">ACADEMY</span>
+          <b>OWASP PCCOE</b>
+          <span className="brand-badge">CTF ACADEMY</span>
         </div>
       </div>
 

@@ -98,8 +98,13 @@ export default function Squads({ currentUser }) {
     <div className="squads-page">
       <div className="section-header">
         <div>
-          <h2>Squad Hub</h2>
-          <p className="subtitle">Build and manage a collaborative squad of up to 5 cybersecurity operatives.</p>
+          <div className="platform-breadcrumb">
+            <span>OWASP PCCOE</span>
+            <span className="breadcrumb-sep">/</span>
+            <span>Squads & Community</span>
+          </div>
+          <h2>OWASP PCCOE Squad Hub</h2>
+          <p className="subtitle">Build and manage collaborative squads with fellow PCCOE cybersecurity students.</p>
         </div>
         <button className="secondary-btn" onClick={load}><FaSyncAlt /> Refresh</button>
       </div>
